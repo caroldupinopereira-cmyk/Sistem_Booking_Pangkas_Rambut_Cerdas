@@ -90,41 +90,6 @@ python -m unittest discover -s tests -v
 
 Tes memakai database sementara dan waktu terkontrol; tidak membuat pelanggan atau akun uji pada database utama, tidak mengirim pesan sungguhan.
 
-## Kerja kelompok melalui GitHub
-
-Pemilik repository dapat mengundang anggota melalui **Settings > Collaborators > Add people**. Anggota perlu menerima undangan menggunakan akun GitHub masing-masing.
-
-Setelah mendapat akses, setiap anggota menyalin repository ke laptop sendiri:
-
-```powershell
-git clone <URL-REPOSITORY>
-cd Sistem_Booking_Pangkas_Rambut_Cerdas
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-Ganti `<URL-REPOSITORY>` dengan URL repository kelompok. Sesuaikan perintah `cd` jika nama repository berbeda. Jalankan aplikasi mengikuti panduan di atas; setiap laptop membuat database dan akun admin lokal sendiri.
-
-Untuk setiap tugas, ambil perubahan terbaru dan buat branch sendiri:
-
-```powershell
-git switch main
-git pull --ff-only origin main
-git switch -c fitur/nama-fitur
-```
-
-Setelah mengedit, periksa perubahan, jalankan pengujian, lalu kirim branch:
-
-```powershell
-python -m unittest discover -s tests -v
-git diff
-git add <file-yang-diubah>
-git commit -m "Jelaskan perubahan"
-git push -u origin fitur/nama-fitur
-```
-
-Buka Pull Request di GitHub menuju `main` agar teman bisa meninjau sebelum digabung. Gunakan nama branch yang berbeda untuk setiap tugas. File `.env`, `instance/`, database, dan secret lokal tidak dibagikan melalui Git.
-
 ## Penyimpanan database lokal
 
 Folder proyek berada dalam jalur OneDrive. Jalankan satu salinan database pada satu komputer; jangan membuka database yang sama di dua mesin melalui sinkronisasi. Untuk salinan cadangan, hentikan server sebelum menyalin folder `instance`. Jangan membagikan `.env`, `secret.key`, atau database pelanggan.
