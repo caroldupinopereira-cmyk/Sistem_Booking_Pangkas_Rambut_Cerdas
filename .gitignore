@@ -1,0 +1,11 @@
+instance/
+.env
+.venv/
+__pycache__/
+*.pyc
+work/
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*
+secret.key
