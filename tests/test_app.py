@@ -238,7 +238,7 @@ class BookingTests(unittest.TestCase):
         )
         with connect(self.path) as db:
             self.assertEqual(
-                db.execute("SELECT count(*) FROM messages").fetchone()[0], 0
+                db.execute("SELECT count(*) FROM messages").fetchone()[0], 1
             )
 
     def test_status_sequence_and_payment_rollback(self):
@@ -375,12 +375,11 @@ class BookingTests(unittest.TestCase):
         )
         self.assertEqual(self.row(token)["email"], "")
 
-    def test_no_message_when_email_consent_zero(self):
+    def test_operational_email_without_optional_reminder_consent(self):
         self.make(consent="0")
         with connect(self.path) as db:
-            self.assertEqual(
-                db.execute("SELECT count(*) FROM messages").fetchone()[0], 0
-            )
+            kinds=[row[0] for row in db.execute("SELECT kind FROM messages")]
+            self.assertEqual(kinds,["confirmation"])
 
     def test_demo_mode_does_not_open_smtp(self):
         self.make()
@@ -538,7 +537,7 @@ class BookingTests(unittest.TestCase):
             with patch("app.process_messages", return_value=1) as processor:
                 response = self.post("/booking/" + token + "/change", {"action": "cancel"})
                 self.assertEqual(response.status_code, 302)
-                processor.assert_called_once_with(self.app.config["DATABASE"], self.app.config, limit=1, include_reminders=False)
+                processor.assert_called_once_with(self.app.config["DATABASE"], self.app.config, limit=1, include_reminders=False, booking_token=token)
 
 
     def test_concurrent_email_dispatch_sends_only_once(self):
@@ -831,6 +830,58 @@ class BookingTests(unittest.TestCase):
         with patch.dict("os.environ",{"VERCEL":"1"}), patch("app.process_messages",side_effect=RuntimeError()), patch("app.process_admin_notifications",return_value=1) as admin, patch.object(self.app.logger,"error"):
             self.post("/booking/"+token+"/change",{"action":"cancel"})
             admin.assert_called_once()
+
+
+    def test_admin_changes_queue_operational_email_without_reminder_optin(self):
+        token=self.make(consent="0")
+        change_booking(self.path,token,"reschedule","2026-10-10T14:00:00",actor="admin")
+        change_booking(self.path,token,"cancel",actor="admin")
+        with connect(self.path) as db:
+            rows=db.execute("SELECT kind,status FROM messages ORDER BY id").fetchall()
+            self.assertEqual([row["kind"] for row in rows],["confirmation","reschedule","cancellation"])
+            self.assertEqual([row["kind"] for row in rows if row["status"]=='pending'],["cancellation"])
+        with patch("messaging._send_smtp",return_value=None) as sender:
+            process_messages(self.path,self._smtp_config(),booking_token=token)
+            sender.assert_called_once()
+            self.assertTrue(sender.call_args.args[2].startswith("Pembatalan booking"))
+
+    def test_booking_dispatch_targets_current_booking_not_backlog(self):
+        first=self.make()
+        second=self.make("2026-10-10T11:00:00",consent="0")
+        change_booking(self.path,second,"reschedule","2026-10-10T14:00:00",actor="admin")
+        with patch("messaging._send_smtp",return_value=None) as sender:
+            process_messages(self.path,self._smtp_config(),limit=1,include_reminders=False,booking_token=second)
+            self.assertIn(second,sender.call_args.args[3])
+        with connect(self.path) as db:
+            first_id=get_booking(db,first)["id"]
+            self.assertEqual(db.execute("SELECT status FROM messages WHERE booking_id=? AND kind='confirmation'",(first_id,)).fetchone()[0],"pending")
+
+    def test_customer_admin_notifications_are_private_and_immediate(self):
+        with connect(self.path) as db:
+            cursor=db.execute("INSERT INTO customers(email,name,email_verified,created) VALUES (?,?,1,?)",("owner@example.com","Owner",stamp(BASE)))
+            customer_id=cursor.lastrowid
+        token=create_booking(self.path,{"service_id":1,"barber_id":1,"start":"2026-10-10T10:00:00"},customer_id=customer_id)
+        change_booking(self.path,token,"reschedule","2026-10-10T14:00:00",actor="admin")
+        change_booking(self.path,token,"cancel",actor="admin")
+        self.assertEqual(self.client.get("/dasbor/notifications").status_code,302)
+        with self.client.session_transaction() as session:session["customer"]=customer_id
+        response=self.client.get("/dasbor/notifications")
+        self.assertEqual(len(response.json["items"]),2)
+        self.assertEqual(response.json["items"][0]["title"],"Admin membatalkan booking")
+        self.assertIn("Admin membatalkan booking",self.client.get("/dasbor").get_data(as_text=True))
+        with self.client.session_transaction() as session:session["customer"]=customer_id+1
+        self.assertEqual(self.client.get("/dasbor/notifications").json["items"],[])
+
+    def test_admin_endpoint_dispatches_change_email_for_google_customer_optout(self):
+        self.login()
+        self.app.config.update(self._smtp_config())
+        token=self.make(consent="0")
+        with patch.dict("os.environ",{"VERCEL":"1"}), patch("messaging._send_smtp",return_value=None) as sender, patch("app.process_admin_notifications",return_value=0):
+            response=self.post("/admin/booking/"+token,{"action":"cancel"})
+            self.assertEqual(response.status_code,302)
+            sender.assert_called_once()
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT status FROM messages WHERE kind='cancellation'").fetchone()[0],"accepted")
 
 
 if __name__ == "__main__":

@@ -17,7 +17,8 @@
             <label>Email<input name="email" type="email" maxlength="120" autocomplete="email" value="{{ email|default('') }}" required></label>
             <label>Password<input name="password" type="password" minlength="10" autocomplete="new-password" required></label>
             <label>Ulangi password<input name="confirm" type="password" minlength="10" autocomplete="new-password" required></label>
-            <label class="check"><input type="checkbox" name="email_consent" value="1" required> Saya setuju menerima konfirmasi dan pengingat lewat email.</label>
+            <label class="check"><input type="checkbox" name="email_consent" value="1"> Saya ingin menerima pengingat sebelum jadwal lewat email.</label>
+            <p class="help">Konfirmasi, perubahan jadwal, dan pembatalan booking online tetap dikirim ke email akun Anda.</p>
             <p class="help">Password minimal 10 karakter. Setelah daftar, kami kirim kode verifikasi 6 digit ke email Anda.</p>
             <button class="btn primary wide">Daftar & kirim kode {{ icon("arrow-right") }}</button>
         </form>

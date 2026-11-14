@@ -201,3 +201,28 @@ document.querySelectorAll('[data-copy-link]').forEach(button => button.addEventL
     setInterval(refresh,30000);
     refresh();
 })();
+
+(() => {
+    const panel=document.querySelector('[data-customer-notifications]');
+    if(!panel)return;
+    let loading=false;
+    async function refreshCustomerNotifications(){
+        if(document.hidden||loading)return;loading=true;
+        try{
+            const response=await fetch('/dasbor/notifications',{cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
+            if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw new Error();
+            const data=await response.json(),list=panel.querySelector('[data-customer-notifications-list]');
+            list.replaceChildren();
+            for(const item of data.items){
+                const link=document.createElement('a');link.className='notification-item is-unread';link.href='/booking/'+encodeURIComponent(item.token);
+                for(const [tag,text] of [['strong',item.title],['span',item.body],['small',item.code+' · '+item.created.replace('T',' ')+' WIB']]){const node=document.createElement(tag);node.textContent=text;link.append(node);}
+                list.append(link);
+            }
+            if(!data.items.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='Belum ada perubahan dari admin.';list.append(empty);}
+            panel.querySelector('[data-customer-notifications-status]').textContent='Pembaruan diperiksa setiap 30 detik. Email operasional juga diantrekan untuk perubahan dan pembatalan booking online.';
+        }catch{panel.querySelector('[data-customer-notifications-status]').textContent='Pembaruan otomatis belum berhasil. Muat ulang halaman untuk melihat perubahan terbaru.';}
+        finally{loading=false;}
+    }
+    setInterval(refreshCustomerNotifications,30000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCustomerNotifications();});
+})();

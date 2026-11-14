@@ -14,6 +14,7 @@ from flask import (
     jsonify,
     abort,
     send_from_directory,
+    g,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import connect, init_db, settings, TursoDatabase
@@ -33,7 +34,7 @@ from booking import (
 )
 from messaging import process_messages, send_verification_code, smtp_health
 from analytics import insights
-from notifications import inbox, mark_read, ensure_push_keys, save_subscription, process_admin_notifications
+from notifications import inbox, mark_read, ensure_push_keys, save_subscription, process_admin_notifications, customer_inbox
 
 ROOT = Path(__file__).resolve().parent
 STATUS = {
@@ -249,9 +250,9 @@ def create_app(test_config=None):
     @app.after_request
     def dispatch_serverless_email(response):
         if os.environ.get("VERCEL") == "1" and request.method == "POST" and response.status_code < 400:
-            if request.endpoint in {"dasbor_booking", "change", "walkin", "admin_booking"}:
+            if request.endpoint in {"dasbor_booking", "change", "walkin", "admin_booking"} and getattr(g,"booking_notification_token",None):
                 try:
-                    process_messages(app.config["DATABASE"], app.config, limit=1, include_reminders=False)
+                    process_messages(app.config["DATABASE"], app.config, limit=1, include_reminders=False, booking_token=g.booking_notification_token)
                 except Exception:
                     app.logger.error("Email pelanggan tertunda; periksa Pesan Email.")
                 try:
@@ -394,7 +395,8 @@ def create_app(test_config=None):
         except BookingError as e:
             flash(str(e), "error")
             return redirect(url_for("booking_detail", token=token))
-        flash("Perubahan booking berhasil disimpan.", "success")
+        g.booking_notification_token = token
+        flash("Perubahan booking berhasil disimpan. Pelanggan dapat melihat pembaruan di dasbor; email pemberitahuan diproses terpisah.", "success")
         return redirect(url_for("booking_detail", token=token))
 
     # --- Akun pelanggan ---
@@ -454,9 +456,6 @@ def create_app(test_config=None):
                 return render_template("daftar.html", name=name, email=email)
             if password != confirm:
                 flash("Ulangi password dengan benar.", "error")
-                return render_template("daftar.html", name=name, email=email)
-            if not consent:
-                flash("Centang persetujuan notifikasi email untuk melanjutkan.", "error")
                 return render_template("daftar.html", name=name, email=email)
             with db() as c:
                 existing = c.execute("SELECT id FROM customers WHERE email=?", (email,)).fetchone()
@@ -623,6 +622,7 @@ def create_app(test_config=None):
                 session.clear()
                 return redirect(url_for("masuk"))
             rows = customer_bookings(c, cust["id"])
+            customer_notifications = customer_inbox(c, cust["id"])
             services = c.execute("SELECT * FROM services WHERE active=1").fetchall()
             barbers = c.execute("SELECT * FROM barbers WHERE active=1").fetchall()
         upcoming, history_rows = [], []
@@ -645,7 +645,14 @@ def create_app(test_config=None):
         return render_template(
             "dasbor.html", cust=cust, upcoming=upcoming, history_rows=history_rows,
             next_booking=next_booking, remaining=remaining, services=services, barbers=barbers,
+            customer_notifications=customer_notifications,
         )
+
+    @app.route("/dasbor/notifications")
+    @customer_only
+    def customer_notifications():
+        with db() as c:
+            return jsonify(customer_inbox(c,session["customer"]))
 
     @app.route("/dasbor/booking", methods=["POST"])
     @customer_only
@@ -655,6 +662,7 @@ def create_app(test_config=None):
                 app.config["DATABASE"], request.form, source="online",
                 actor="pelanggan", customer_id=session["customer"],
             )
+            g.booking_notification_token = token
             flash("Booking berhasil dibuat.", "success")
             return redirect(url_for("booking_detail", token=token))
         except BookingError as e:
@@ -837,6 +845,7 @@ def create_app(test_config=None):
         if request.method == "POST":
             try:
                 token = create_booking(app.config["DATABASE"], request.form, source="walkin", actor="admin")
+                g.booking_notification_token = token
                 flash("Pelanggan langsung berhasil masuk jadwal.", "success")
                 return redirect(url_for("booking_detail", token=token))
             except BookingError as e:
@@ -855,7 +864,8 @@ def create_app(test_config=None):
                 change_booking(app.config["DATABASE"], token, action, request.form.get("start"), actor="admin")
             else:
                 update_status(app.config["DATABASE"], token, action, request.form.get("paid"))
-            flash("Booking berhasil diperbarui.", "success")
+            g.booking_notification_token = token
+            flash("Booking berhasil diperbarui. Pelanggan online dapat melihat pembaruan di dasbor; email perubahan jadwal atau pembatalan diproses terpisah.", "success")
         except BookingError as e:
             flash(str(e), "error")
         return redirect(url_for("booking_detail", token=token))

@@ -17,6 +17,12 @@
 </div>
 {% endif %}
 
+<section class="panel" data-customer-notifications>
+    <span class="eyebrow">PEMBERITAHUAN</span>
+    <h2>Pembaruan dari admin</h2>
+    <div data-customer-notifications-list>{% for n in customer_notifications['items'] %}<a class="notification-item is-unread" href="{{ url_for('booking_detail',token=n.token) }}"><strong>{{ n.title }}</strong><span>{{ n.body }}</span><small>{{ n.code }} · {{ n.created|when }} WIB</small></a>{% else %}<p class="muted">Belum ada perubahan dari admin.</p>{% endfor %}</div>
+    <p class="help" data-customer-notifications-status role="status">Pembaruan diperiksa setiap 30 detik saat halaman aktif. Informasi tetap tersedia meskipun email belum diterima.</p>
+</section>
 <section class="panel">
     <span class="eyebrow">RINGKASAN</span>
     <h2>Booking terdekat</h2>
@@ -59,7 +65,7 @@
         </div>
         <div class="form-section">
             <h3><span class="step">03</span> Konfirmasi</h3>
-            <div class="booking-policy"><b>Kebijakan booking</b><p>Ubah atau batal paling lambat 1 jam sebelum jadwal. Pembayaran dilakukan di tempat.</p></div>
+            <div class="booking-policy"><b>Kebijakan booking</b><p>Konfirmasi, perubahan jadwal, dan pembatalan booking dikirim ke email akun Anda.</p><p>Ubah atau batal paling lambat 1 jam sebelum jadwal. Pembayaran dilakukan di tempat.</p></div>
             <button class="btn primary wide booking-submit" type="submit" disabled>Konfirmasi booking <span>{{ icon("check") }}</span></button>
         </div>
     </form>
@@ -114,8 +120,9 @@
         {{ csrf_field() }}
         <div class="form-grid">
             <label>Nama<input name="name" value="{{ cust.name }}" minlength="2" maxlength="80" required></label>
-            <label class="check" style="margin-top:28px"><input type="checkbox" name="email_consent" value="1" {% if cust.email_consent %}checked{% endif %}> Terima konfirmasi dan pengingat email</label>
+            <label class="check" style="margin-top:28px"><input type="checkbox" name="email_consent" value="1" {% if cust.email_consent %}checked{% endif %}> Terima pengingat sebelum jadwal lewat email</label>
         </div>
+        <p class="help">Konfirmasi booking, perubahan jadwal, dan pembatalan online tetap dikirim sebagai pemberitahuan operasional. Pilihan di atas mengatur pengingat untuk booking baru.</p>
         <button class="btn primary">Simpan profil</button>
     </form>
     <hr>

@@ -27,10 +27,10 @@ Tidak perlu MySQL atau XAMPP. Untuk F5, gunakan ekstensi Python dan Python Debug
 - **Beranda (`/`)** hanya informasi (layanan, harga, kapster, promo, alamat) dengan tombol "Masuk atau daftar untuk booking"; tidak ada form booking publik.
 - **Masuk (`/masuk`)**: tombol **Masuk dengan Google** (OAuth 2.0 authorization code, tanpa dependensi baru, pakai `urllib`) dan form email+password, serta tautan daftar.
 - **Google OAuth**: dikonfigurasi via `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, default `http://127.0.0.1:5000/auth/google/callback`). Jika kredensial kosong, tombol Google disembunyikan dan aplikasi tetap jalan normal. Hanya email Google yang terverifikasi (`email_verified=true`) diterima. Jika email sudah ada, `google_sub` ditautkan dan `email_verified` diset `1`. Untuk mencegah pre-account-hijacking, akun email yang sebelumnya belum terverifikasi dan punya password akan **kehilangan password** saat ditautkan ke Google (masuk kembali lewat Google).
-- **Daftar & verifikasi email**: daftar (nama, email, password minimal 10 karakter, ulangi password, persetujuan notifikasi). Kode verifikasi 6 digit dikirim ke email (berlaku 10 menit, sekali pakai, hash HMAC-SHA256 dengan `SECRET_KEY`, maksimal 5 salah lalu hangus, minta ulang minimal 60 detik, maksimal 5 kode/jam/email). Setelah benar, email terverifikasi dan otomatis login.
+- **Daftar & verifikasi email**: daftar (nama, email, password minimal 10 karakter, ulangi password, pilihan pengingat opsional). Kode verifikasi 6 digit dikirim ke email (berlaku 10 menit, sekali pakai, hash HMAC-SHA256 dengan `SECRET_KEY`, maksimal 5 salah lalu hangus, minta ulang minimal 60 detik, maksimal 5 kode/jam/email). Setelah benar, email terverifikasi dan otomatis login.
 - **Login password**: pembatasan 8 percobaan/5 menit per sesi dan per email, pesan salah selalu "Email atau password tidak cocok." Akun belum terverifikasi bisa login tetapi booking diblokir dan dasbor menampilkan banner verifikasi + kirim ulang. Akun khusus Google yang mencoba login password mendapat pesan umum yang sama.
 - **Lupa password**: belum disediakan (pengembangan lanjutan). Pelanggan yang akunnya tertaut Google dapat masuk dengan Google.
-- **Dasbor (`/dasbor`, wajib login)**: ringkasan & booking terdekat, buat booking baru (form di dasbor, nama/email dari akun, hanya jika email terverifikasi), booking mendatang (ubah/batalkan, minimal 60 menit sebelum jadwal atau "Hubungi admin"), riwayat, profil (ubah nama, saklar persetujuan notifikasi, info metode masuk), keluar (`POST /keluar` + CSRF).
+- **Dasbor (`/dasbor`, wajib login)**: ringkasan & booking terdekat, buat booking baru (form di dasbor, nama/email dari akun, hanya jika email terverifikasi), booking mendatang (ubah/batalkan, minimal 60 menit sebelum jadwal atau "Hubungi admin"), riwayat, profil (ubah nama, saklar pengingat opsional, info metode masuk), keluar (`POST /keluar` + CSRF).
 - **Keamanan kepemilikan**: pelanggan hanya bisa melihat/mengubah booking miliknya (kepemilikan diverifikasi); akses booking milik orang lain ditolak (404). Tautan `/booking/<token>` tetap berfungsi untuk link di email; jika dibuka pemilik, tersedia tombol kembali ke dasbor.
 - Route `/book` lama dialihkan ke `/dasbor` atau `/masuk`.
 
@@ -59,7 +59,7 @@ Tidak perlu MySQL atau XAMPP. Untuk F5, gunakan ekstensi Python dan Python Debug
 
 ## Email (SMTP)
 
-Default `MAIL_MODE=demo`: outbox disusun dan diproses, **tidak mengirim email**. Admin melihat status `Simulasi` di halaman Pesan Email. Email booking hanya dibuat jika ada alamat email dan persetujuan pemberitahuan.
+Default `MAIL_MODE=demo`: outbox disusun dan diproses, **tidak mengirim email**. Admin melihat status `Simulasi` di halaman Pesan Email. Untuk booking online, konfirmasi, perubahan, dan pembatalan dibuat jika ada alamat email, termasuk ketika pengingat tidak dipilih. Pengingat tetap membutuhkan pilihan pelanggan. Email walk-in mengikuti persetujuan yang dicatat admin.
 
 **Kode verifikasi akun (sinkron, tidak lewat antrean 15 detik):**
 - `MAIL_MODE=demo`: kode 6 digit dicetak ke terminal lewat logging `[DEMO] Kode verifikasi untuk x@y.com: 123456` dan disimpan sebagai pesan simulasi yang terlihat di halaman admin **Pesan Email**.
@@ -176,3 +176,17 @@ dan folder Spam. Pesan Gagal dapat dicoba ulang secara manual, khusus pesan yang
 bersangkutan. Status unknown/dispatching/accepted tidak boleh dikirim ulang dari tombol
 ini karena berpotensi menimbulkan duplikasi. Email admin mempunyai tabel status sendiri.
 Perbaikan kode tidak mengirim ulang pesan gagal lama secara otomatis.
+
+## Perubahan atau pembatalan oleh admin
+
+Booking online selalu membuat email operasional untuk confirmation/reschedule/cancellation.
+email_consent mengatur pengingat opsional, bukan memblokir informasi perubahan layanan.
+Tidak ada pengiriman pemasaran otomatis. Pilihan pengingat disalin saat booking dibuat.
+Pelanggan melihat perubahan admin langsung di bagian Pembaruan dari admin pada dasbor,
+yang memakai histori miliknya dan diperiksa setiap 30 detik saat tab aktif. Ini tetap
+berfungsi ketika SMTP gagal. Histori perubahan lama dapat ditampilkan tanpa mengirim
+ulang email lama secara otomatis.
+
+Pengiriman Vercel menargetkan booking yang baru berhasil dibuat/diubah; antrean booking
+lain tidak mengambil giliran email tersebut. Perubahan status internal admin juga terlihat
+di panel pelanggan; email otomatis khusus konfirmasi, perubahan jadwal, dan pembatalan.

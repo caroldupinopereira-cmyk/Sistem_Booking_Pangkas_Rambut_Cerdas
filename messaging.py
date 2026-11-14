@@ -139,7 +139,7 @@ def send_verification_code(path, config, email, code):
     return True
 
 
-def process_messages(path, config, limit=10, include_reminders=True, message_id=None):
+def process_messages(path, config, limit=10, include_reminders=True, message_id=None, booking_token=None):
     """Claim durably before SMTP; never hold a remote write transaction during I/O.
 
     A process interrupted after claiming leaves 'dispatching' for manual review.
@@ -150,8 +150,9 @@ def process_messages(path, config, limit=10, include_reminders=True, message_id=
             "SELECT id FROM messages WHERE status='pending' AND due<=? "
             + ("" if include_reminders else "AND kind!='reminder' ")
             + ("AND id=? " if message_id is not None else "")
+            + ("AND booking_id=(SELECT id FROM bookings WHERE token=?) " if booking_token else "")
             + "ORDER BY due,id LIMIT ?",
-            (stamp(now()), int(message_id), int(limit)) if message_id is not None else (stamp(now()), int(limit)),
+            tuple([stamp(now())] + ([int(message_id)] if message_id is not None else []) + ([booking_token] if booking_token else []) + [int(limit)]),
         ).fetchall()
     count = 0
     for candidate in rows:

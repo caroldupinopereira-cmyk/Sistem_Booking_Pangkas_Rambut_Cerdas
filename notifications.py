@@ -135,3 +135,18 @@ def process_admin_notifications(path, config, limit=1, notification_id=None):
                     db.execute("UPDATE push_subscriptions SET active=0 WHERE id=?", (push["id"],))
         count += 1
     return count
+
+
+def customer_inbox(db, customer_id):
+    rows = db.execute("SELECT h.*,b.token,b.code FROM history h JOIN bookings b ON b.id=h.booking_id WHERE b.customer_id=? AND h.actor='admin' AND h.action IN ('jadwal_diubah','dibatalkan','arrived','serving','completed','no_show') ORDER BY h.id DESC LIMIT 10", (customer_id,)).fetchall()
+    titles = {"jadwal_diubah":"Admin mengubah jadwal", "dibatalkan":"Admin membatalkan booking", "arrived":"Kedatangan dicatat admin", "serving":"Pelayanan dimulai", "completed":"Pelayanan selesai", "no_show":"Booking ditandai tidak hadir"}
+    items=[]
+    for row in rows:
+        if row["action"] == "jadwal_diubah":
+            body = "Jadwal baru: " + str(row["new_start"]).replace("T"," ") + " WIB."
+        elif row["action"] == "dibatalkan":
+            body = "Booking Anda dibatalkan oleh admin. Hubungi admin untuk informasi lebih lanjut."
+        else:
+            body = "Status pelayanan diperbarui oleh admin. Buka detail booking untuk melihat perkembangannya."
+        items.append({"id":row["id"],"title":titles[row["action"]],"body":body,"created":row["created"],"token":row["token"],"code":row["code"]})
+    return {"latest_id":items[0]["id"] if items else 0,"items":items}

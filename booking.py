@@ -143,7 +143,8 @@ def queue(db, bid, kind, at=None):
         "UPDATE messages SET status='obsolete' WHERE booking_id=? AND status='pending'",
         (bid,),
     )
-    if not b["email"] or not b["email_consent"]:
+    operational = b["source"] == "online" and kind in {"confirmation", "reschedule", "cancellation"}
+    if not b["email"] or (not operational and not b["email_consent"]):
         return
     db.execute(
         "INSERT OR IGNORE INTO messages(booking_id,version,kind,due) VALUES (?,?,?,?)",
@@ -151,6 +152,7 @@ def queue(db, bid, kind, at=None):
     )
     if (
         kind != "cancellation"
+        and b["email_consent"]
         and b["source"] == "online"
         and parse(b["start"]) - at >= timedelta(hours=2)
     ):
