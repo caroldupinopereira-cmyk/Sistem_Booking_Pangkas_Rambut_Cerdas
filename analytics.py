@@ -59,7 +59,7 @@ def insights(db):
     ):
         # Baseline at prediction time: only resolved historical events.
         own = [
-            h for h in eligible if h["phone"] == b["phone"] and parse(h["start"]) < at
+            h for h in eligible if h["email"] == b["email"] and parse(h["start"]) < at
         ]
         score = (
             round(

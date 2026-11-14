@@ -1,6 +1,6 @@
 # Sistem Booking Pangkas Rambut Cerdas
 
-Aplikasi lokal Python + Flask + SQLite, mengikuti alur Pelanggan -> Sistem -> Admin/Kapster yang dibahas. Nama tampilan awal **Ruang Pangkas** dapat diubah admin. Database pelanggan kosong; yang diisi otomatis hanya contoh layanan, kapster, dan jam kerja.
+Aplikasi lokal Python + Flask + SQLite, mengikuti alur Pelanggan -> Sistem -> Admin/Kapster. Nama tampilan awal **Ruang Pangkas** dapat diubah admin. Database pelanggan kosong; yang diisi otomatis hanya contoh layanan, kapster, dan jam kerja.
 
 ## Menjalankan di Visual Studio Code
 
@@ -8,8 +8,9 @@ Aplikasi lokal Python + Flask + SQLite, mengikuti alur Pelanggan -> Sistem -> Ad
 2. Buka **Terminal > New Terminal**.
 3. Jalankan `python app.py`.
 4. Buka http://127.0.0.1:5000 untuk pelanggan.
-5. Buka http://127.0.0.1:5000/setup untuk membuat akun admin pertama, kemudian atur nama usaha, harga, kapster, jam kerja, dan toleransi.
-6. Hentikan server dengan Ctrl+C. Database tetap tersimpan.
+5. Pelanggan masuk/daftar di `/masuk` (Google atau email+password) lalu booking melalui `/dasbor`.
+6. Buka http://127.0.0.1:5000/setup untuk membuat akun admin pertama (email + password), kemudian atur nama usaha, harga, kapster, jam kerja, dan toleransi.
+7. Hentikan server dengan Ctrl+C. Database tetap tersimpan.
 
 Bisa juga klik dua kali **JALANKAN.bat**. Python 3.10+ diperlukan. Flask sudah tersedia pada laptop yang dipakai saat pembuatan. Pada laptop baru, gunakan lingkungan virtual:
 
@@ -21,11 +22,22 @@ python -m venv .venv
 
 Tidak perlu MySQL atau XAMPP. Untuk F5, gunakan ekstensi Python dan Python Debugger yang direkomendasikan VS Code.
 
-## Alur yang sudah berjalan
+## Akun pelanggan & dasbor
 
-- Pilih layanan/kapster/tanggal, lihat jam kosong, isi nama dan WA, lalu booking.
+- **Beranda (`/`)** hanya informasi (layanan, harga, kapster, promo, alamat) dengan tombol "Masuk atau daftar untuk booking"; tidak ada form booking publik.
+- **Masuk (`/masuk`)**: tombol **Masuk dengan Google** (OAuth 2.0 authorization code, tanpa dependensi baru, pakai `urllib`) dan form email+password, serta tautan daftar.
+- **Google OAuth**: dikonfigurasi via `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, default `http://127.0.0.1:5000/auth/google/callback`). Jika kredensial kosong, tombol Google disembunyikan dan aplikasi tetap jalan normal. Hanya email Google yang terverifikasi (`email_verified=true`) diterima. Jika email sudah ada, `google_sub` ditautkan dan `email_verified` diset `1`. Untuk mencegah pre-account-hijacking, akun email yang sebelumnya belum terverifikasi dan punya password akan **kehilangan password** saat ditautkan ke Google (masuk kembali lewat Google).
+- **Daftar & verifikasi email**: daftar (nama, email, password minimal 10 karakter, ulangi password, persetujuan notifikasi). Kode verifikasi 6 digit dikirim ke email (berlaku 10 menit, sekali pakai, hash HMAC-SHA256 dengan `SECRET_KEY`, maksimal 5 salah lalu hangus, minta ulang minimal 60 detik, maksimal 5 kode/jam/email). Setelah benar, email terverifikasi dan otomatis login.
+- **Login password**: pembatasan 8 percobaan/5 menit per sesi dan per email, pesan salah selalu "Email atau password tidak cocok." Akun belum terverifikasi bisa login tetapi booking diblokir dan dasbor menampilkan banner verifikasi + kirim ulang. Akun khusus Google yang mencoba login password mendapat pesan umum yang sama.
+- **Lupa password**: belum disediakan (pengembangan lanjutan). Pelanggan yang akunnya tertaut Google dapat masuk dengan Google.
+- **Dasbor (`/dasbor`, wajib login)**: ringkasan & booking terdekat, buat booking baru (form di dasbor, nama/email dari akun, hanya jika email terverifikasi), booking mendatang (ubah/batalkan, minimal 60 menit sebelum jadwal atau "Hubungi admin"), riwayat, profil (ubah nama, saklar persetujuan notifikasi, info metode masuk), keluar (`POST /keluar` + CSRF).
+- **Keamanan kepemilikan**: pelanggan hanya bisa melihat/mengubah booking miliknya (kepemilikan diverifikasi); akses booking milik orang lain ditolak (404). Tautan `/booking/<token>` tetap berfungsi untuk link di email; jika dibuka pemilik, tersedia tombol kembali ke dasbor.
+- Route `/book` lama dialihkan ke `/dasbor` atau `/masuk`.
+
+## Alur booking & operasional
+
 - Cek bentrok berdasarkan **seluruh interval** pada kapster yang sama. SQLite transaction mencegah dua pemesanan bersamaan pada slot yang sama.
-- Bukti booking dan tautan acak pribadi untuk melihat/mengelola booking tanpa akun pelanggan.
+- Bukti booking dan tautan acak pribadi `/booking/<token>` untuk melihat/mengelola booking.
 - Reschedule dan pembatalan: minimal 60 menit sebelum jadwal aktif. Tepat 60 menit masih diterima. Pengecekan ulang ketika perubahan disimpan.
 - Reschedule gagal tidak menghilangkan booking lama. Reschedule berhasil mengganti slot, mencatat histori, dan memperbarui antrean pengingat.
 - Pembatalan melepas slot dan menghentikan pesan lama yang belum dikirim.
@@ -45,28 +57,38 @@ Tidak perlu MySQL atau XAMPP. Untuk F5, gunakan ekstensi Python dan Python Debug
 - Runtime pengingat berjalan di thread setiap 15 detik selama `python app.py` hidup. Menjalankan lewat server WSGI lain belum menyalakan worker; sediakan worker terpisah untuk deployment.
 - Aplikasi untuk demo lokal; belum dideploy untuk publik. HTTPS, server produksi, backup terjadwal, dan operasi multi-lokasi belum disiapkan.
 
-## WhatsApp: simulasi dan integrasi
+## Email (SMTP)
 
-Default `WA_MODE=demo`: outbox disusun dan diproses, **tidak mengirim WA**. Admin melihat status `Simulasi` di halaman Pesan WhatsApp. Nama/nomor tidak dikirim keluar oleh mode demo. Pesan hanya dibuat jika ada nomor dan persetujuan pemberitahuan.
+Default `MAIL_MODE=demo`: outbox disusun dan diproses, **tidak mengirim email**. Admin melihat status `Simulasi` di halaman Pesan Email. Email booking hanya dibuat jika ada alamat email dan persetujuan pemberitahuan.
+
+**Kode verifikasi akun (sinkron, tidak lewat antrean 15 detik):**
+- `MAIL_MODE=demo`: kode 6 digit dicetak ke terminal lewat logging `[DEMO] Kode verifikasi untuk x@y.com: 123456` dan disimpan sebagai pesan simulasi yang terlihat di halaman admin **Pesan Email**.
+- `MAIL_MODE=smtp`: kode tidak pernah dicetak ke terminal/log. Jika pengiriman SMTP gagal, ditampilkan pesan umum tanpa detail server/password dan tanpa retry otomatis.
 
 Booking lebih dari atau tepat dua jam sebelumnya mendapat pengingat dua jam sebelum jadwal. Booking kurang dari dua jam sebelumnya hanya konfirmasi. Reschedule mengikuti aturan yang sama terhadap jadwal baru. Pembatalan mengakhiri pengingat. Antrean diperiksa lagi terhadap versi jadwal sebelum dikirim.
 
-Untuk pengiriman asli:
+### Mode SMTP (Gmail App Password, gratis)
 
-1. Siapkan akun WhatsApp Business Platform/Cloud API, nomor pengirim, token, dan versi API yang masih berlaku.
-2. Siapkan empat template yang disetujui: konfirmasi, perubahan, pembatalan, pengingat. Adapter menggunakan enam parameter **body** berurutan: nama pelanggan, layanan, kapster, tanggal/jam, kode, tautan kelola booking. Masing-masing template perlu cocok dengan urutan ini.
-3. Salin `.env.example` ke `.env`. Isi kredensial dan nama template, `WA_LANGUAGE`, serta `PUBLIC_BASE_URL` HTTPS yang dapat diakses pelanggan. Baru ubah `WA_MODE=cloud` dan restart.
-4. Uji dengan nomor Anda sendiri sebelum digunakan untuk pelanggan.
+1. Aktifkan verifikasi 2 langkah pada akun Google yang akan dipakai mengirim email.
+2. Buka **Google Account > Keamanan > App Passwords** (Sandi Aplikasi), lalu buat App Password baru.
+3. Salin `.env.example` menjadi `.env`, lalu isi:
+   - `MAIL_MODE=smtp`
+   - `SMTP_HOST=smtp.gmail.com`
+   - `SMTP_PORT=587`
+   - `SMTP_USER=` email Gmail pengirim
+   - `SMTP_PASSWORD=` App Password (bukan password akun biasa)
+   - `MAIL_FROM=` (opsional, default mengikuti `SMTP_USER`)
+   - `PUBLIC_BASE_URL=` alamat aplikasi yang dapat diakses penerima
+4. Restart aplikasi, lalu uji dengan email Anda sendiri.
+5. Batas wajar Gmail gratis sekitar **500 email/hari** (dapat berubah sesuai kebijakan Google). Gunakan secukupnya untuk kebutuhan demo/operasional kecil.
 
-Adapter memakai `POST https://graph.facebook.com/{WA_API_VERSION}/{WA_PHONE_NUMBER_ID}/messages`. Referensi resmi: https://whatsapp.github.io/WhatsApp-Nodejs-SDK/api-reference/messages/template/ (format template; kode aplikasi memakai HTTP Python langsung, bukan SDK tersebut).
-
-Status `accepted` hanya berarti penyedia menerima pesan, bukan bukti delivered/read. Webhook delivery belum diterapkan. Error tidak diulang otomatis untuk menghindari kiriman ganda ketika status jaringan tidak pasti. Untuk mode Cloud diperlukan pengujian dengan akun nyata; belum diuji kirim sungguhan.
+Catatan: status pengiriman yang berhasil berarti email diterima server SMTP; keterlambatan/kegagalan akhir di sisi penerima tetap mungkin terjadi. Error jaringan/timeout dicatat sebagai status tidak pasti dan **tidak dicoba ulang otomatis** agar tidak terkirim ganda. **Jangan membagikan `.env`**, App Password, `secret.key`, atau database pelanggan.
 
 ## Tiga fitur sains data: baseline, bukan model terlatih
 
 1. **Perkiraan jumlah hadir:** rata-rata hari sejenis setelah minimal 14 hari pencatatan penuh. Grafik aktual memasukkan online dan walk-in. Ini baseline; Random Forest/regresi dan pengukuran MAE belum diterapkan.
 2. **Jam promo:** ranking jumlah kedatangan historis di hari/jam sejenis, kemudian filter jam masa depan yang masih memiliki slot. Perhitungan okupansi menit, uji pengaruh promo, dan simulasi keuntungan belum diterapkan.
-3. **Risiko no-show:** frekuensi pribadi dengan smoothing 5 kasus terhadap frekuensi keseluruhan; tampil setelah ada setidaknya 20 booking online berlabel, 5 no-show dan 5 hadir. Ambang ini untuk prototipe, bukan bukti model layak. Belum ada Logistic Regression, Decision Tree, atau evaluasi precision/recall.
+3. **Risiko no-show:** frekuensi pribadi (berdasarkan email pelanggan) dengan smoothing 5 kasus terhadap frekuensi keseluruhan; tampil setelah ada setidaknya 20 booking online berlabel, 5 no-show dan 5 hadir. Ambang ini untuk prototipe, bukan bukti model layak. Belum ada Logistic Regression, Decision Tree, atau evaluasi precision/recall.
 
 Tidak ada penolakan atau pembatalan otomatis berdasarkan skor. Data sintetis tidak dimasukkan ke database utama. Hari tanpa catatan dianggap nol pada baseline sehingga admin perlu mencatat kunjungan secara konsisten. Data tutup/libur historis dan evaluasi bias perlu ditambahkan sebelum mengambil keputusan operasional nyata.
 
@@ -75,7 +97,7 @@ Tidak ada penolakan atau pembatalan otomatis berdasarkan skor. Data sintetis tid
 - `app.py`: halaman, formulir, login, CSRF, dan worker.
 - `booking.py`: aturan slot, transaksi booking, reschedule, batal, status.
 - `database.py`: skema SQLite dan konfigurasi awal.
-- `messaging.py`: outbox, simulasi, adapter Cloud API.
+- `messaging.py`: outbox, simulasi, dan pengiriman email SMTP.
 - `analytics.py`: baseline analisis.
 - `templates/`: tampilan HTML.
 - `static/style.css`, `static/app.js`: desain responsif dan pemilihan slot.
@@ -88,7 +110,7 @@ Tidak ada penolakan atau pembatalan otomatis berdasarkan skor. Data sintetis tid
 python -m unittest discover -s tests -v
 ```
 
-Tes memakai database sementara dan waktu terkontrol; tidak membuat pelanggan atau akun uji pada database utama, tidak mengirim pesan sungguhan.
+Tes memakai database sementara dan waktu terkontrol; tidak membuat pelanggan atau akun uji pada database utama, tidak mengirim email sungguhan.
 
 ## Penyimpanan database lokal
 

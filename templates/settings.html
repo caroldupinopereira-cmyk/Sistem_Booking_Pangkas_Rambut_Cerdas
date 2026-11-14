@@ -20,9 +20,12 @@
        required>
                 </label>
                 <label>
-                    Nomor WA admin<input name="admin_phone"
-       value="{{ shop.admin_phone }}"
-       placeholder="08xxxxxxxxxx">
+                    Email admin<input name="admin_email"
+       type="email"
+       value="{{ shop.admin_email }}"
+       placeholder="admin@gmail.com"
+       autocomplete="email"
+       maxlength="120">
                 </label>
                 <label>
                     Alamat<input name="address" value="{{ shop.address }}" maxlength="200">

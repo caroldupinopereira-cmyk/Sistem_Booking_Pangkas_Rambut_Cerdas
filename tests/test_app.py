@@ -1,7 +1,7 @@
-import unittest, tempfile, threading
+import unittest, tempfile, threading, smtplib, socket
 from pathlib import Path
-from datetime import datetime, timedelta
-from unittest.mock import patch
+from datetime import datetime
+from unittest.mock import patch, MagicMock
 from concurrent.futures import ThreadPoolExecutor
 from database import connect, init_db
 from booking import (
@@ -11,6 +11,7 @@ from booking import (
     slots,
     update_status,
     BookingError,
+    normalize_email,
     stamp,
 )
 from messaging import process_messages
@@ -39,7 +40,7 @@ class BookingTests(unittest.TestCase):
                 "TESTING": True,
                 "DATABASE": str(self.path),
                 "SECRET_KEY": "test-secret",
-                "WA_MODE": "demo",
+                "MAIL_MODE": "demo",
             }
         )
         self.client = self.app.test_client()
@@ -52,16 +53,23 @@ class BookingTests(unittest.TestCase):
         )
         self.tmp.cleanup()
 
-    def make(self, start="2026-10-10T10:00:00", barber=1, consent="1", source="online"):
+    def make(
+        self,
+        start="2026-10-10T10:00:00",
+        barber=1,
+        consent="1",
+        source="online",
+        email="pelanggan@example.com",
+    ):
         return create_booking(
             self.path,
             dict(
                 name="Pelanggan Uji",
-                phone="081234567890",
+                email=email,
                 service_id=1,
                 barber_id=barber,
                 start=start,
-                wa_consent=consent,
+                email_consent=consent,
             ),
             source=source,
         )
@@ -77,7 +85,7 @@ class BookingTests(unittest.TestCase):
 
     def login(self):
         with self.client.session_transaction() as s:
-            s["admin"] = "test-admin"
+            s["admin"] = "admin@example.com"
 
     def test_duplicate_and_overlapping_slots(self):
         self.make()
@@ -184,8 +192,8 @@ class BookingTests(unittest.TestCase):
 
     def test_demo_messages_idempotent(self):
         self.make()
-        self.assertEqual(process_messages(self.path, {"WA_MODE": "demo"}), 1)
-        self.assertEqual(process_messages(self.path, {"WA_MODE": "demo"}), 0)
+        self.assertEqual(process_messages(self.path, {"MAIL_MODE": "demo"}), 1)
+        self.assertEqual(process_messages(self.path, {"MAIL_MODE": "demo"}), 0)
         with connect(self.path) as db:
             self.assertEqual(
                 db.execute(
@@ -198,7 +206,7 @@ class BookingTests(unittest.TestCase):
         a = self.make()
         change_booking(self.path, a, "cancel")
         self.clock = datetime(2026, 10, 10, 8, 0)
-        process_messages(self.path, {"WA_MODE": "demo"})
+        process_messages(self.path, {"MAIL_MODE": "demo"})
         with connect(self.path) as db:
             self.assertEqual(
                 db.execute(
@@ -213,7 +221,7 @@ class BookingTests(unittest.TestCase):
             self.path,
             dict(
                 name="Walk In",
-                phone="",
+                email="",
                 service_id=1,
                 barber_id=2,
                 start="2026-10-10T10:00:00",
@@ -280,15 +288,21 @@ class BookingTests(unittest.TestCase):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
     def test_setup_password_and_login(self):
-        self.post("/setup", dict(username="pemilik", password="contoh-password-ku"))
+        self.post(
+            "/setup",
+            dict(email="PEMILIK@example.com", password="contoh-password-ku"),
+        )
         self.post("/logout", {})
         self.assertEqual(
-            self.post("/login", dict(username="pemilik", password="salah")).status_code,
+            self.post(
+                "/login", dict(email="pemilik@example.com", password="salah")
+            ).status_code,
             200,
         )
         self.assertEqual(
             self.post(
-                "/login", dict(username="pemilik", password="contoh-password-ku")
+                "/login",
+                dict(email="pemilik@example.com", password="contoh-password-ku"),
             ).status_code,
             302,
         )
@@ -308,7 +322,7 @@ class BookingTests(unittest.TestCase):
             self.path,
             dict(
                 name="<script>alert(1)</script>",
-                phone="081234567890",
+                email="aman@example.com",
                 service_id=1,
                 barber_id=1,
                 start="2026-10-10T10:00:00",
@@ -317,6 +331,110 @@ class BookingTests(unittest.TestCase):
         body = self.client.get("/booking/" + a).get_data(as_text=True)
         self.assertNotIn("<script>alert(1)</script>", body)
         self.assertIn("&lt;script&gt;", body)
+
+    def test_email_validation_and_normalization(self):
+        self.assertEqual(normalize_email("  Nama@Gmail.COM  "), "nama@gmail.com")
+        for bad in ["", "nama", "nama@", "@gmail.com", "nama gmail.com", "a@b", " "]:
+            with self.assertRaises(BookingError):
+                normalize_email(bad)
+        self.assertEqual(normalize_email("", required=False), "")
+        self.assertEqual(normalize_email("A@B.C").count("@"), 1)
+
+    def test_online_without_email_rejected_walkin_without_email_accepted(self):
+        with self.assertRaises(BookingError):
+            create_booking(
+                self.path,
+                dict(
+                    name="Pelanggan Uji",
+                    email="",
+                    service_id=1,
+                    barber_id=1,
+                    start="2026-10-10T10:00:00",
+                    email_consent="1",
+                ),
+                source="online",
+            )
+        token = create_booking(
+            self.path,
+            dict(
+                name="Walk In",
+                email="",
+                service_id=1,
+                barber_id=1,
+                start="2026-10-10T10:00:00",
+            ),
+            source="walkin",
+        )
+        self.assertEqual(self.row(token)["email"], "")
+
+    def test_no_message_when_email_consent_zero(self):
+        self.make(consent="0")
+        with connect(self.path) as db:
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM messages").fetchone()[0], 0
+            )
+
+    def test_demo_mode_does_not_open_smtp(self):
+        self.make()
+        with patch("messaging.smtplib.SMTP") as smtp:
+            n = process_messages(self.path, {"MAIL_MODE": "demo"})
+            self.assertEqual(n, 1)
+            smtp.assert_not_called()
+
+    def _smtp_config(self):
+        return {
+            "MAIL_MODE": "smtp",
+            "SMTP_HOST": "smtp.gmail.com",
+            "SMTP_PORT": "587",
+            "SMTP_USER": "pengirim@example.com",
+            "SMTP_PASSWORD": "app-password-rahasia",
+            "MAIL_FROM": "pengirim@example.com",
+            "PUBLIC_BASE_URL": "http://127.0.0.1:5000",
+        }
+
+    def test_smtp_mode_uses_smtplib_once(self):
+        self.make()
+        with patch("messaging.smtplib.SMTP") as smtp:
+            server = MagicMock()
+            smtp.return_value.__enter__.return_value = server
+            n = process_messages(self.path, self._smtp_config())
+            self.assertEqual(n, 1)
+            smtp.assert_called_once_with("smtp.gmail.com", 587, timeout=10)
+            server.starttls.assert_called_once()
+            server.login.assert_called_once_with(
+                "pengirim@example.com", "app-password-rahasia"
+            )
+            server.send_message.assert_called_once()
+        with connect(self.path) as db:
+            row = db.execute("SELECT status,error FROM messages").fetchone()
+            self.assertEqual(row["status"], "accepted")
+            self.assertEqual(row["error"], "")
+
+    def test_smtp_error_no_retry_and_no_password_leak(self):
+        cases = [
+            (smtplib.SMTPAuthenticationError(535, b"auth"), "failed"),
+            (smtplib.SMTPRecipientsRefused({"x": (550, b"bad")}), "failed"),
+            (socket.timeout("timeout"), "unknown"),
+        ]
+        for exc, expected in cases:
+            with self.subTest(error=type(exc).__name__):
+                self.tearDown()
+                self.setUp()
+                self.make()
+                with patch("messaging.smtplib.SMTP") as smtp:
+                    server = MagicMock()
+                    smtp.return_value.__enter__.return_value = server
+                    server.send_message.side_effect = exc
+                    n1 = process_messages(self.path, self._smtp_config())
+                    self.assertEqual(n1, 1)
+                    self.assertEqual(server.send_message.call_count, 1)
+                    n2 = process_messages(self.path, self._smtp_config())
+                    self.assertEqual(n2, 0)
+                    self.assertEqual(server.send_message.call_count, 1)
+                with connect(self.path) as db:
+                    row = db.execute("SELECT status,error FROM messages").fetchone()
+                    self.assertEqual(row["status"], expected)
+                    self.assertNotIn("app-password-rahasia", row["error"] or "")
 
 
 if __name__ == "__main__":

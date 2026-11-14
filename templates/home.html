@@ -10,16 +10,16 @@
                 <br>
                 <em>lebih terencana.</em>
             </h1>
-            <p>Pilih layanan, temukan jam yang pas, lalu datang sesuai jadwal. Penampilan baru dimulai dari rencana yang sederhana.</p>
-            <a class="btn primary" href="#booking">Pilih jadwal pangkas <span>↗</span>
-            </a>
+            <p>Pilih layanan, temukan jam yang pas, lalu datang sesuai jadwal. Masuk atau daftar untuk mengelola booking di dasbor pribadi Anda.</p>
+            {% if is_customer %}
+                <a class="btn primary" href="{{ url_for('dasbor') }}">Buka dasbor booking <span>↗</span></a>
+            {% else %}
+                <a class="btn primary" href="{{ url_for('masuk') }}">Masuk atau daftar untuk booking <span>↗</span></a>
+            {% endif %}
             <div class="hero-facts">
-                <span>
-                    <b>01</b> Pilih layanan</span>
-                <span>
-                    <b>02</b> Booking waktu</span>
-                <span>
-                    <b>03</b> Datang & pangkas</span>
+                <span><b>01</b> Masuk akun</span>
+                <span><b>02</b> Pilih jadwal</span>
+                <span><b>03</b> Kelola di dasbor</span>
             </div>
         </div>
         <div class="hero-art" aria-hidden="true">
@@ -58,42 +58,34 @@
 {% endif %}
 <section id="booking" class="booking-layout">
     <aside class="booking-intro">
-        <span class="eyebrow">BOOK YOUR VISIT</span>
-        <h2>
-            Satu jadwal.
-            <br>
-            Satu langkah
-            <br>
-            lebih siap.
-        </h2>
-        <p>Tidak perlu membuat akun. Simpan tautan pribadi setelah booking untuk melihat atau mengubah jadwalmu.</p>
-        <div class="info-card">
-            <span>✉</span>
-            <div>
-                <b>Pengingat sebelum datang</b>
-                <p>2 jam sebelum jadwal, untuk booking yang memenuhi ketentuan.</p>
-            </div>
-        </div>
-        <div class="info-card">
-            <span>↻</span>
-            <div>
-                <b>Rencana bisa berubah</b>
-                <p>Ubah atau batalkan paling lambat 1 jam sebelumnya.</p>
-            </div>
-        </div>
+        <span class="eyebrow">LAYANAN & INFORMASI</span>
+        <h2>Satu jadwal.<br>Satu langkah<br>lebih siap.</h2>
+        <p>Booking dilakukan lewat dasbor pelanggan agar jadwal, email konfirmasi, dan riwayat tersimpan rapi di akun Anda.</p>
+        <div class="info-card"><span>✉</span><div><b>Pengingat sebelum datang</b><p>2 jam sebelum jadwal, untuk booking yang memenuhi ketentuan.</p></div></div>
+        <div class="info-card"><span>↻</span><div><b>Rencana bisa berubah</b><p>Ubah atau batalkan paling lambat 1 jam sebelumnya.</p></div></div>
         <div class="location">
             <span class="eyebrow">TEMUKAN KAMI</span>
             <p>{{ shop.address }}</p>
-            {% if shop.admin_phone %}
-                <a href="https://wa.me/{{ shop.admin_phone }}"
-                   target="_blank"
-                   rel="noreferrer">Hubungi admin ↗</a>
-            {% endif %}
+            {% if shop.admin_email %}<a href="mailto:{{ shop.admin_email }}" rel="noreferrer">Hubungi admin ↗</a>{% endif %}
         </div>
     </aside>
     <div class="booking-panel">
-        {% set walkin_mode = false %}
-        {% include "_booking_form.html" %}
+        <span class="eyebrow">LAYANAN KAMI</span>
+        <h2>Harga & kapster</h2>
+        <div class="service-options" style="margin-bottom:18px">
+            {% for s in services %}
+                <div class="service-option" style="cursor:default"><span class="service-icon">✂</span><strong>{{ s.name }}</strong><span class="muted">{{ s.duration }} menit</span><b>{{ s.price|rupiah }}</b></div>
+            {% else %}
+                <p>Belum ada layanan aktif.</p>
+            {% endfor %}
+        </div>
+        <p><b>Kapster:</b> {{ barbers|map(attribute='name')|join(', ') if barbers else 'Belum tersedia' }}</p>
+        <div class="booking-policy"><b>Mulai booking</b><p>Masuk atau daftar untuk memilih slot, menerima konfirmasi email, dan mengelola jadwal di dasbor.</p></div>
+        {% if is_customer %}
+            <a class="btn primary wide" href="{{ url_for('dasbor') }}">Buka dasbor untuk booking <span>↗</span></a>
+        {% else %}
+            <a class="btn primary wide" href="{{ url_for('masuk') }}">Masuk atau daftar untuk booking <span>↗</span></a>
+        {% endif %}
     </div>
 </section>
 {% endblock %}

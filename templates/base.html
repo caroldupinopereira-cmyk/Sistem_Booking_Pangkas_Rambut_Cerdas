@@ -19,10 +19,20 @@
                 </span>
             </a>
             <nav>
-                <a href="{{ url_for('home') }}#booking">Booking sekarang</a>
+                {% if request.path.startswith('/admin') %}
+                    <a href="{{ url_for('home') }}">Beranda</a>
+                {% elif is_customer %}
+                    <a href="{{ url_for('dasbor') }}">Dasbor saya</a>
+                {% else %}
+                    <a href="{{ url_for('masuk') }}">Masuk / Daftar</a>
+                {% endif %}
                 {% if is_admin %}
                     <a class="nav-pill" href="{{ url_for('dashboard') }}">Dashboard admin ↗</a>
                     <form action="{{ url_for('logout') }}" method="post">
+                        {{ csrf_field() }}<button class="text-btn" type="submit">Keluar admin</button>
+                    </form>
+                {% elif is_customer %}
+                    <form action="{{ url_for('keluar') }}" method="post">
                         {{ csrf_field() }}<button class="text-btn" type="submit">Keluar</button>
                     </form>
                 {% else %}
@@ -34,7 +44,7 @@
             <div class="admin-layout">
                 <aside class="sidebar">
                     <span class="eyebrow">RUANG KERJA</span>
-                    {% for endpoint,label,icon in [('dashboard','Jadwal pelanggan','▦'),('walkin','Tambah walk-in','＋'),('analytics','Analisis & promo','↗'),('messages','Pesan WhatsApp','✉'),('admin_settings','Pengaturan','⚙')] %}
+                    {% for endpoint,label,icon in [('dashboard','Jadwal pelanggan','▦'),('walkin','Tambah walk-in','＋'),('analytics','Analisis & promo','↗'),('messages','Pesan Email','✉'),('admin_settings','Pengaturan','⚙')] %}
                         <a class="{% if request.endpoint==endpoint %}active{% endif %}"
                            href="{{ url_for(endpoint) }}">
                             <span>{{ icon }}</span>{{ label }}</a>
@@ -42,7 +52,7 @@
                     <div class="sidebar-note">
                         <span class="status-dot"></span> Lokal · WIB
                         <p>Data tersimpan di laptop ini.</p>
-                        <small>WA: {{ 'simulasi' if wa_mode=='demo' else 'Cloud API' }}</small>
+                        <small>Email: {{ 'simulasi' if mail_mode=='demo' else 'SMTP' }}</small>
                     </div>
                 </aside>
         {% endif %}

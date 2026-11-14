@@ -1,8 +1,111 @@
-"""Outbox WhatsApp: simulasi default; Cloud API memerlukan template dan kredensial."""
+"""Outbox email: simulasi default; SMTP memerlukan konfigurasi lengkap."""
 
-import json, os, urllib.request, urllib.error
+import logging
+import smtplib
+import socket
+from email.message import EmailMessage
 from database import connect
 from booking import now, stamp, get_booking, parse
+
+
+def _build(b, kind, link):
+    when = parse(b["start"]).strftime("%d/%m/%Y %H:%M") + " WIB"
+    titles = {
+        "confirmation": "Konfirmasi booking",
+        "reschedule": "Perubahan jadwal booking",
+        "cancellation": "Pembatalan booking",
+        "reminder": "Pengingat booking",
+    }
+    intros = {
+        "confirmation": "Booking Anda berhasil dibuat.",
+        "reschedule": "Jadwal booking Anda telah diperbarui.",
+        "cancellation": "Booking Anda telah dibatalkan.",
+        "reminder": "Ini pengingat untuk jadwal booking Anda.",
+    }
+    subject = f"{titles[kind]} - {b['code']}"
+    body = (
+        f"Halo {b['name']},\n\n"
+        f"{intros[kind]}\n\n"
+        f"Layanan : {b['service_name']}\n"
+        f"Kapster : {b['barber_name']}\n"
+        f"Jadwal  : {when}\n"
+        f"Kode    : {b['code']}\n\n"
+        f"Kelola booking: {link}\n\n"
+        "Terima kasih."
+    )
+    preview = (
+        f"{titles[kind]}. Halo {b['name']}, {b['service_name']} bersama {b['barber_name']} "
+        f"pada {when}. Kode {b['code']}. Kelola: {link}"
+    )
+    return subject, body, preview
+
+
+def _smtp_ready(config):
+    keys = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD"]
+    return all(str(config.get(k, "")).strip() for k in keys)
+
+
+def _send_smtp(config, to_addr, subject, body):
+    host = str(config.get("SMTP_HOST", "smtp.gmail.com") or "smtp.gmail.com").strip()
+    try:
+        port = int(config.get("SMTP_PORT", 587))
+    except (ValueError, TypeError):
+        port = 587
+    user = str(config.get("SMTP_USER", "")).strip()
+    password = str(config.get("SMTP_PASSWORD", ""))
+    sender = str(config.get("MAIL_FROM", "") or user).strip() or user
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = to_addr
+    msg.set_content(body)
+    safe = (
+        body.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\n", "<br>")
+    )
+    msg.add_alternative(f"<html><body><p>{safe}</p></body></html>", subtype="html")
+
+    with smtplib.SMTP(host, port, timeout=10) as server:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(user, password)
+        server.send_message(msg)
+    return msg.get("Message-ID")
+
+
+def send_verification_code(path, config, email, code):
+    """Kirim kode verifikasi 6 digit secara sinkron. Jangan log token/secret."""
+    subject = "Kode verifikasi akun - Ruang Pangkas"
+    body = (
+        "Halo,\n\n"
+        f"Kode verifikasi akun Anda: {code}\n"
+        "Kode berlaku 10 menit dan hanya dapat dipakai sekali.\n\n"
+        "Jika Anda tidak meminta kode ini, abaikan email ini."
+    )
+    preview = f"Kode verifikasi dikirim ke {email}. Berlaku 10 menit."
+    mode = str(config.get("MAIL_MODE", "demo") or "demo").lower()
+    status = "simulated"
+    error = ""
+    if mode == "demo":
+        logging.warning("[DEMO] Kode verifikasi untuk %s: %s", email, code)
+    else:
+        if not _smtp_ready(config):
+            raise RuntimeError("smtp_unavailable")
+        try:
+            _send_smtp(config, email, subject, body)
+            status = "accepted"
+        except Exception:
+            raise RuntimeError("smtp_failed")
+    with connect(path) as db:
+        db.execute(
+            "INSERT INTO verification_messages(email,kind,created,status,preview,error) VALUES (?,?,?,?,?,?)",
+            (email, "verification", stamp(now()), status, preview, error),
+        )
+    return True
 
 
 def process_messages(path, config):
@@ -28,85 +131,38 @@ def process_messages(path, config):
                 )
                 continue
             link = (
-                config.get("PUBLIC_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
+                str(config.get("PUBLIC_BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
                 + "/booking/"
                 + b["token"]
             )
-            title = {
-                "confirmation": "Booking berhasil",
-                "reschedule": "Jadwal diperbarui",
-                "cancellation": "Booking dibatalkan",
-                "reminder": "Pengingat booking",
-            }[m["kind"]]
-            when = parse(b["start"]).strftime("%d/%m/%Y %H:%M") + " WIB"
-            body = f"{title}. Halo {b['name']}, {b['service_name']} bersama {b['barber_name']} pada {when}. Kode {b['code']}. Kelola: {link}"
+            subject, body, preview = _build(b, m["kind"], link)
             status = "simulated"
             error = ""
             pid = None
-            if config.get("WA_MODE", "demo") == "cloud":
-                required = [
-                    "WA_TOKEN",
-                    "WA_PHONE_NUMBER_ID",
-                    "WA_API_VERSION",
-                    "WA_TEMPLATE_" + m["kind"].upper(),
-                ]
-                if any(not config.get(k) for k in required) or not config.get(
-                    "PUBLIC_BASE_URL", ""
-                ).startswith("https://"):
+            mode = str(config.get("MAIL_MODE", "demo") or "demo").lower()
+            if mode == "smtp":
+                if not _smtp_ready(config):
                     status = "failed"
-                    error = "Konfigurasi Cloud API / alamat HTTPS belum lengkap."
+                    error = "Konfigurasi SMTP belum lengkap."
                 else:
-                    payload = {
-                        "messaging_product": "whatsapp",
-                        "to": b["phone"],
-                        "type": "template",
-                        "template": {
-                            "name": config["WA_TEMPLATE_" + m["kind"].upper()],
-                            "language": {"code": config.get("WA_LANGUAGE", "id")},
-                            "components": [
-                                {
-                                    "type": "body",
-                                    "parameters": [
-                                        {"type": "text", "text": v}
-                                        for v in [
-                                            b["name"],
-                                            b["service_name"],
-                                            b["barber_name"],
-                                            when,
-                                            b["code"],
-                                            link,
-                                        ]
-                                    ],
-                                }
-                            ],
-                        },
-                    }
-                    url = f"https://graph.facebook.com/{config['WA_API_VERSION']}/{config['WA_PHONE_NUMBER_ID']}/messages"
-                    req = urllib.request.Request(
-                        url,
-                        data=json.dumps(payload).encode(),
-                        headers={
-                            "Authorization": "Bearer " + config["WA_TOKEN"],
-                            "Content-Type": "application/json",
-                        },
-                        method="POST",
-                    )
                     try:
-                        with urllib.request.urlopen(req, timeout=8) as resp:
-                            result = json.load(resp)
-                        pid = result.get("messages", [{}])[0].get("id")
-                        status = "accepted" if pid else "unknown"
-                        if not pid:
-                            error = "Respons tanpa ID pesan; periksa penyedia sebelum mengirim ulang."
-                    except urllib.error.HTTPError as exc:
+                        pid = _send_smtp(config, b["email"], subject, body)
+                        status = "accepted"
+                    except smtplib.SMTPAuthenticationError:
                         status = "failed"
-                        error = f"Cloud API menolak permintaan (HTTP {exc.code}). Periksa kredensial dan template."
+                        error = "Autentikasi SMTP gagal. Periksa email dan App Password."
+                    except smtplib.SMTPRecipientsRefused:
+                        status = "failed"
+                        error = "Alamat email penerima ditolak oleh server."
+                    except (smtplib.SMTPException, socket.timeout, TimeoutError, OSError):
+                        status = "unknown"
+                        error = "Status pengiriman email tidak pasti. Periksa penyedia; tidak dicoba ulang otomatis."
                     except Exception:
                         status = "unknown"
-                        error = "Status pengiriman tidak pasti. Periksa penyedia; tidak dicoba ulang otomatis."
+                        error = "Status pengiriman email tidak pasti. Periksa penyedia; tidak dicoba ulang otomatis."
             db.execute(
                 "UPDATE messages SET status=?,preview=?,error=?,provider_id=?,processed_at=? WHERE id=?",
-                (status, body, error, pid, stamp(now()), m["id"]),
+                (status, preview, error, pid, stamp(now()), m["id"]),
             )
             count += 1
     return count

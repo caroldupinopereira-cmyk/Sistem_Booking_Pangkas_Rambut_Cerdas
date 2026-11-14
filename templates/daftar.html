@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Daftar akun{% endblock %}
+{% block content %}
+<section class="auth-wrap">
+    <div class="auth-art">
+        <span class="eyebrow">AKUN PELANGGAN</span>
+        <h1>Buat akun<br><em>booking.</em></h1>
+        <p>Email akan diverifikasi agar konfirmasi dan pengingat sampai ke pemiliknya.</p>
+        <span class="auth-scissors">✂</span>
+    </div>
+    <div class="auth-form">
+        <span class="eyebrow">DAFTAR</span>
+        <h2>Mulai dari akunmu.</h2>
+        <form method="post">
+            {{ csrf_field() }}
+            <label>Nama<input name="name" minlength="2" maxlength="80" autocomplete="name" value="{{ name|default('') }}" required></label>
+            <label>Email<input name="email" type="email" maxlength="120" autocomplete="email" value="{{ email|default('') }}" required></label>
+            <label>Password<input name="password" type="password" minlength="10" autocomplete="new-password" required></label>
+            <label>Ulangi password<input name="confirm" type="password" minlength="10" autocomplete="new-password" required></label>
+            <label class="check"><input type="checkbox" name="email_consent" value="1" required> Saya setuju menerima konfirmasi dan pengingat lewat email.</label>
+            <p class="help">Password minimal 10 karakter. Setelah daftar, kami kirim kode verifikasi 6 digit ke email Anda.</p>
+            <button class="btn primary wide">Daftar & kirim kode ↗</button>
+        </form>
+        <p class="help">Sudah punya akun? <a href="{{ url_for('masuk') }}">Masuk</a></p>
+    </div>
+</section>
+{% endblock %}

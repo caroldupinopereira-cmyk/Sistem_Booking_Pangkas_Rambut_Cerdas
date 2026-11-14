@@ -67,21 +67,22 @@
        autocomplete="name"
        required>
             </label>
-            <label>Nomor WhatsApp {{ '(opsional)' if walkin_mode else '' }}<input name="phone"
-       type="tel"
-       placeholder="08xxxxxxxxxx"
-       autocomplete="tel"
+            <label>Email {{ '(opsional)' if walkin_mode else '' }}<input name="email"
+       type="email"
+       placeholder="nama@gmail.com"
+       autocomplete="email"
+       maxlength="120"
        {% if not walkin_mode %}required{% endif %}>
             </label>
         </div>
         <label class="check">
-            <input type="checkbox" name="wa_consent" value="1">{{ 'Pelanggan setuju menerima' if walkin_mode else 'Saya setuju menerima' }} konfirmasi dan pengingat terkait booking melalui WhatsApp.
+            <input type="checkbox" name="email_consent" value="1">{{ 'Pelanggan setuju menerima' if walkin_mode else 'Saya setuju menerima' }} konfirmasi dan pengingat lewat email.
         </label>
         <div class="booking-policy">
             <b>Lebih tenang, lebih terencana.</b>
             <p>Ubah atau batal paling lambat 1 jam sebelum jadwal. Pembayaran dilakukan di tempat. Waktu pelayanan dapat bergeser mengikuti kondisi di lokasi.</p>
-            {% if wa_mode=="demo" %}
-                <small>Mode demo: pesan WA dicatat dalam simulasi, belum dikirim ke ponsel.</small>
+            {% if mail_mode=="demo" %}
+                <small>Mode demo: email dicatat dalam simulasi, belum dikirim ke alamat pelanggan.</small>
             {% endif %}
         </div>
         <button class="btn primary wide booking-submit" type="submit" disabled>

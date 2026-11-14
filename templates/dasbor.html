@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Dasbor pelanggan{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">DASBOR PELANGGAN</span>
+        <h1>Halo, {{ cust.name }}.</h1>
+        <p class="muted">Kelola booking, jadwal, dan profil Anda di satu tempat.</p>
+    </div>
+    <a class="btn primary" href="#buat-booking">＋ Buat booking baru</a>
+</div>
+
+{% if not cust.email_verified %}
+<div class="flash error" role="alert">
+    <b>Verifikasi email dulu untuk bisa booking.</b> Kami perlu memastikan konfirmasi dan pengingat sampai ke pemilik email.
+    <form method="post" action="{{ url_for('dasbor_kirim_ulang') }}" style="margin-top:10px">{{ csrf_field() }}<button class="btn small outline" type="submit">Kirim ulang kode verifikasi</button></form>
+</div>
+{% endif %}
+
+<section class="panel">
+    <span class="eyebrow">RINGKASAN</span>
+    <h2>Booking terdekat</h2>
+    {% if next_booking %}
+        <p><b>{{ next_booking.service_name }}</b> bersama {{ next_booking.barber_name }}</p>
+        <p>{{ next_booking.start|when }} WIB · <span class="badge {{ next_booking.status }}">{{ status_labels[next_booking.status] }}</span></p>
+        <p class="muted">Sisa waktu: {{ remaining }}</p>
+        <a class="btn outline" href="{{ url_for('booking_detail', token=next_booking.token) }}">Lihat detail ↗</a>
+    {% else %}
+        <p class="muted">Belum ada booking terdekat. Buat booking baru di bawah.</p>
+    {% endif %}
+</section>
+
+<section id="buat-booking" class="panel">
+    <span class="eyebrow">BUAT BOOKING BARU</span>
+    <h2>Pilih jadwal</h2>
+    {% if cust.email_verified %}
+    <form class="slot-form" method="post" action="{{ url_for('dasbor_booking') }}">
+        {{ csrf_field() }}<input type="hidden" name="start" required>
+        <div class="form-section">
+            <h3><span class="step">01</span> Pilih layanan</h3>
+            <div class="service-options">
+                {% for s in services %}
+                <label class="service-option">
+                    <input type="radio" name="service_id" value="{{ s.id }}" {% if loop.first %}checked{% endif %}>
+                    <span class="service-icon">✂</span><strong>{{ s.name }}</strong><span class="muted">{{ s.duration }} menit</span><b>{{ s.price|rupiah }}</b>
+                </label>
+                {% else %}<p>Belum ada layanan aktif.</p>{% endfor %}
+            </div>
+        </div>
+        <div class="form-section">
+            <h3><span class="step">02</span> Tentukan waktu</h3>
+            <div class="form-grid">
+                <label>Kapster<select name="barber_id" required>{% for k in barbers %}<option value="{{ k.id }}">{{ k.name }}</option>{% endfor %}</select></label>
+                <label>Tanggal<input type="date" name="date" value="{{ today }}" min="{{ today }}" required></label>
+            </div>
+            <div class="slot-heading"><span>Jam mulai tersedia <small>WIB</small></span><span class="live-dot">Sesuai kalender</span></div>
+            <div class="slot-list" aria-live="polite"><p class="muted">Pilih layanan dan tanggal untuk melihat jadwal.</p></div>
+            <p class="help">Nama ({{ cust.name }}) dan email ({{ cust.email }}) diambil dari akun Anda.</p>
+        </div>
+        <div class="form-section">
+            <h3><span class="step">03</span> Konfirmasi</h3>
+            <div class="booking-policy"><b>Kebijakan booking</b><p>Ubah atau batal paling lambat 1 jam sebelum jadwal. Pembayaran dilakukan di tempat.</p></div>
+            <button class="btn primary wide booking-submit" type="submit" disabled>Konfirmasi booking <span>↗</span></button>
+        </div>
+    </form>
+    {% else %}
+        <p class="muted">Verifikasi email terlebih dahulu untuk membuat booking baru.</p>
+    {% endif %}
+</section>
+
+<section class="panel">
+    <span class="eyebrow">BOOKING MENDATANG</span>
+    <h2>Jadwal aktif</h2>
+    {% if upcoming %}
+    <div class="table-scroll"><table><thead><tr><th>Jadwal</th><th>Layanan / kapster</th><th>Status</th><th></th></tr></thead><tbody>
+        {% for b in upcoming %}
+        <tr>
+            <td><b>{{ b.start|when }}</b><small>{{ b.code }}</small></td>
+            <td>{{ b.service_name }}<small>{{ b.barber_name }}</small></td>
+            <td><span class="badge {{ b.status }}">{{ status_labels[b.status] }}</span></td>
+            <td><a class="table-link" href="{{ url_for('booking_detail', token=b.token) }}">Kelola ↗</a></td>
+        </tr>
+        {% endfor %}
+    </tbody></table></div>
+    {% else %}<p class="muted">Tidak ada booking terjadwal mendatang.</p>{% endif %}
+</section>
+
+<section class="panel">
+    <span class="eyebrow">RIWAYAT</span>
+    <h2>Booking sebelumnya</h2>
+    {% if history_rows %}
+    <div class="table-scroll"><table><thead><tr><th>Jadwal</th><th>Layanan / kapster</th><th>Status</th><th></th></tr></thead><tbody>
+        {% for b in history_rows %}
+        <tr>
+            <td><b>{{ b.start|when }}</b><small>{{ b.code }}</small></td>
+            <td>{{ b.service_name }}<small>{{ b.barber_name }}</small></td>
+            <td><span class="badge {{ b.status }}">{{ status_labels[b.status] }}</span></td>
+            <td><a class="table-link" href="{{ url_for('booking_detail', token=b.token) }}">Detail ↗</a></td>
+        </tr>
+        {% endfor %}
+    </tbody></table></div>
+    {% else %}<p class="muted">Belum ada riwayat booking.</p>{% endif %}
+</section>
+
+<section class="panel">
+    <span class="eyebrow">PROFIL</span>
+    <h2>Pengaturan akun</h2>
+    <p><b>Email:</b> {{ cust.email }} <small class="muted">(tidak dapat diubah)</small></p>
+    <p><b>Metode masuk:</b>
+        {% if cust.google_sub %}Google{% if cust.password_hash %} &amp; Password{% endif %}{% elif cust.password_hash %}Email &amp; Password{% else %}-{% endif %}
+        · Status email: {{ 'Terverifikasi' if cust.email_verified else 'Belum terverifikasi' }}
+    </p>
+    <form method="post" action="{{ url_for('dasbor_profil') }}">
+        {{ csrf_field() }}
+        <div class="form-grid">
+            <label>Nama<input name="name" value="{{ cust.name }}" minlength="2" maxlength="80" required></label>
+            <label class="check" style="margin-top:28px"><input type="checkbox" name="email_consent" value="1" {% if cust.email_consent %}checked{% endif %}> Terima konfirmasi dan pengingat email</label>
+        </div>
+        <button class="btn primary">Simpan profil</button>
+    </form>
+    <hr>
+    <form method="post" action="{{ url_for('keluar') }}">{{ csrf_field() }}<button class="btn danger" type="submit">Keluar dari akun</button></form>
+</section>
+{% endblock %}

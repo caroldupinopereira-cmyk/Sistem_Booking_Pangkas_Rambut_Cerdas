@@ -30,14 +30,12 @@ def parse(value):
         raise BookingError("Tanggal atau jam tidak valid.")
 
 
-def phone_number(value, required=True):
-    value = re.sub(r"[\s()+-]", "", str(value or ""))
+def normalize_email(value, required=True):
+    value = str(value or "").strip().lower()
     if not value and not required:
         return ""
-    if value.startswith("0"):
-        value = "62" + value[1:]
-    if not re.fullmatch(r"62[0-9]{8,12}", value):
-        raise BookingError("Isi nomor WA Indonesia yang valid, misalnya 081234567890.")
+    if len(value) > 120 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+        raise BookingError("Isi email yang valid, misalnya nama@gmail.com.")
     return value
 
 
@@ -130,7 +128,7 @@ def queue(db, bid, kind, at=None):
         "UPDATE messages SET status='obsolete' WHERE booking_id=? AND status='pending'",
         (bid,),
     )
-    if not b["phone"] or not b["wa_consent"]:
+    if not b["email"] or not b["email_consent"]:
         return
     db.execute(
         "INSERT OR IGNORE INTO messages(booking_id,version,kind,due) VALUES (?,?,?,?)",
@@ -152,20 +150,35 @@ def queue(db, bid, kind, at=None):
         )
 
 
-def create_booking(path, data, source="online", actor="pelanggan"):
-    name = str(data.get("name", "")).strip()
-    if not 2 <= len(name) <= 80:
-        raise BookingError("Nama harus terdiri dari 2 sampai 80 karakter.")
-    phone = phone_number(data.get("phone"), required=source == "online")
-    try:
-        service_id = int(data["service_id"])
-        barber_id = int(data["barber_id"])
-    except (ValueError, KeyError, TypeError):
-        raise BookingError("Pilih layanan dan kapster.")
-    start = parse(data.get("start"))
+def create_booking(path, data, source="online", actor="pelanggan", customer_id=None):
     at = now()
     with connect(path) as db:
         db.execute("BEGIN IMMEDIATE")
+        customer = None
+        if customer_id is not None:
+            customer = db.execute(
+                "SELECT * FROM customers WHERE id=?", (int(customer_id),)
+            ).fetchone()
+            if not customer:
+                raise BookingError("Akun pelanggan tidak ditemukan.")
+        if source == "online" and customer is not None:
+            if not customer["email_verified"]:
+                raise BookingError("Verifikasi email dulu untuk bisa booking.")
+            name = str(customer["name"] or "").strip()
+            email = normalize_email(customer["email"])
+            consent = 1 if customer["email_consent"] else 0
+        else:
+            name = str(data.get("name", "")).strip()
+            if not 2 <= len(name) <= 80:
+                raise BookingError("Nama harus terdiri dari 2 sampai 80 karakter.")
+            email = normalize_email(data.get("email"), required=source == "online")
+            consent = 1 if data.get("email_consent") in ("on", "1", True) else 0
+        try:
+            service_id = int(data["service_id"])
+            barber_id = int(data["barber_id"])
+        except (ValueError, KeyError, TypeError):
+            raise BookingError("Pilih layanan dan kapster.")
+        start = parse(data.get("start"))
         s = db.execute(
             "SELECT * FROM services WHERE id=? AND active=1", (service_id,)
         ).fetchone()
@@ -174,14 +187,13 @@ def create_booking(path, data, source="online", actor="pelanggan"):
         end = validate_slot(db, barber_id, start, s["duration"], at=at)
         token = secrets.token_urlsafe(32)
         code = "RP-" + secrets.token_hex(4).upper()
-        consent = 1 if data.get("wa_consent") in ("on", "1", True) else 0
         cur = db.execute(
-            "INSERT INTO bookings(token,code,name,phone,service_id,barber_id,start,end,duration,price,source,created,wa_consent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO bookings(token,code,name,email,service_id,barber_id,start,end,duration,price,source,created,email_consent,customer_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 token,
                 code,
                 name,
-                phone,
+                email,
                 service_id,
                 barber_id,
                 stamp(start),
@@ -191,6 +203,7 @@ def create_booking(path, data, source="online", actor="pelanggan"):
                 source,
                 stamp(at),
                 consent,
+                int(customer["id"]) if customer else None,
             ),
         )
         record(db, cur.lastrowid, "booking_dibuat", actor, new=stamp(start))
@@ -203,6 +216,19 @@ def get_booking(db, token):
         "SELECT b.*,s.name service_name,k.name barber_name FROM bookings b JOIN services s ON b.service_id=s.id JOIN barbers k ON b.barber_id=k.id WHERE b.token=?",
         (token,),
     ).fetchone()
+
+
+def get_customer(db, customer_id):
+    if not customer_id:
+        return None
+    return db.execute("SELECT * FROM customers WHERE id=?", (int(customer_id),)).fetchone()
+
+
+def customer_bookings(db, customer_id):
+    return db.execute(
+        "SELECT b.*,s.name service_name,k.name barber_name FROM bookings b JOIN services s ON b.service_id=s.id JOIN barbers k ON b.barber_id=k.id WHERE b.customer_id=? ORDER BY b.start DESC",
+        (int(customer_id),),
+    ).fetchall()
 
 
 def change_booking(path, token, action, start=None, actor="pelanggan"):

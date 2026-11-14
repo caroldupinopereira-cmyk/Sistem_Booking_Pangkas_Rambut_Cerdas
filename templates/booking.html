@@ -10,6 +10,7 @@
         </h1>
         <p>Simpan tautan halaman ini. Tautan bersifat pribadi dan dapat digunakan untuk mengelola booking.</p>
         <button class="btn outline" type="button" data-copy-link>Salin tautan booking ↗</button>
+        {% if owner %}<a class="btn outline" href="{{ url_for('dasbor') }}">Kembali ke dasbor ↗</a>{% endif %}
         <span class="copy-result" role="status"></span>
     </section>
     <div class="detail-grid">
@@ -61,12 +62,12 @@
                 {% endif %}
             </dl>
             <p class="help">Bayar di tempat. Jika ada promo, harga akhir dikonfirmasi admin.</p>
-            <div class="notice">{{ 'WA sedang dalam mode simulasi; pesan tidak dikirim ke ponsel.' if wa_mode=='demo' else 'Status booking tetap valid meskipun pengiriman WA mengalami kendala.' }}</div>
+            <div class="notice">{{ 'Email sedang dalam mode simulasi; pesan tidak dikirim ke alamat pelanggan.' if mail_mode=='demo' else 'Status booking tetap valid meskipun pengiriman email mengalami kendala.' }}</div>
         </section>
         <section class="panel">
             <span class="eyebrow">KELOLA BOOKING</span>
             <h2>Rencana berubah?</h2>
-            {% if editable %}
+            {% if editable and (owner or is_admin) %}
                 <p class="muted">Pilih jadwal pengganti. Layanan dan kapster tetap sama.</p>
                 <form class="slot-form"
                       data-token="{{ b.token }}"
@@ -75,19 +76,13 @@
                     {{ csrf_field() }}<input type="hidden" name="action" value="reschedule">
                     <input type="hidden" name="start">
                     <label>
-                        Tanggal baru<input type="date"
-       name="date"
-       min="{{ today }}"
-       value="{{ b.start[:10] }}"
-       required>
+                        Tanggal baru<input type="date" name="date" min="{{ today }}" value="{{ b.start[:10] }}" required>
                     </label>
                     <div class="slot-list" aria-live="polite"></div>
-                    <button class="btn primary wide booking-submit"
-                            disabled>Simpan jadwal baru ↗</button>
+                    <button class="btn primary wide booking-submit" disabled>Simpan jadwal baru ↗</button>
                 </form>
                 <hr>
-                <form method="post"
-                      action="{{ url_for('change',token=b.token) }}"
+                <form method="post" action="{{ url_for('change',token=b.token) }}"
                       data-confirm="Batalkan booking ini? Slot akan tersedia untuk pelanggan lain.">
                     {{ csrf_field() }}<input type="hidden" name="action" value="cancel">
                     <button class="btn danger wide">Batalkan booking</button>
@@ -99,13 +94,12 @@
                     <p>Ubah atau batal mandiri tersedia hanya untuk booking terjadwal, minimal 1 jam sebelum pelayanan.</p>
                 </div>
             {% endif %}
-            {% if shop.admin_phone %}
+            {% if shop.admin_email %}
                 <a class="btn outline wide"
-                   href="https://wa.me/{{ shop.admin_phone }}"
-                   target="_blank"
+                   href="mailto:{{ shop.admin_email }}"
                    rel="noreferrer">Hubungi admin ↗</a>
             {% else %}
-                <p class="help">Nomor admin belum diatur. Hubungi tempat cukur secara langsung.</p>
+                <p class="help">Email admin belum diatur. Hubungi tempat cukur secara langsung.</p>
             {% endif %}
         </section>
     </div>

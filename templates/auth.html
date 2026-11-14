@@ -23,10 +23,10 @@
             <h2>{{ 'Mulai dari akunmu.' if setup else 'Selamat datang kembali.' }}</h2>
             <p class="muted">{{ 'Buat satu akun admin lokal untuk mengelola tempat cukur. Tidak ada password bawaan.' if setup else 'Masuk untuk melihat jadwal dan mengelola pelayanan.' }}</p>
             <form method="post">
-                {{ csrf_field() }}<label>Username<input name="username"
-       minlength="3"
-       maxlength="60"
-       autocomplete="username"
+                {{ csrf_field() }}<label>Email<input name="email"
+       type="email"
+       maxlength="120"
+       autocomplete="email"
        required
        autofocus>
                 </label>
