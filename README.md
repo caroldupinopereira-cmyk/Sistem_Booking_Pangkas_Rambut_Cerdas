@@ -130,8 +130,8 @@ Untuk mengganti akun, isi `ADMIN_CHANGE_CODE` dalam .env dengan kode acak minima
 Kode ini berbeda dari password admin, sandi Gmail, dan Client Secret Google.
 
 Jalankan `python admin_account.py` dari terminal server yang menyimpan database.
-Masukkan kode khusus, email baru, dan password baru dua kali. Kode serta password
-tidak ditampilkan saat diketik. Akun lama diperbarui, bukan menambah akun kedua.
+Masukkan kode khusus, email baru, dan password baru dua kali. Kode khusus terlihat agar mudah ditempel; jangan bagikan layar terminal. Password
+tetap disembunyikan saat diketik. Akun lama diperbarui, bukan menambah akun kedua.
 Sesi lama dibatalkan pada request berikutnya, termasuk jika email tidak berubah.
 Jika kode hilang, pemilik akses konfigurasi server dapat menggantinya di .env.
 Tidak ada endpoint publik untuk mengganti admin. Integrasi database online untuk
