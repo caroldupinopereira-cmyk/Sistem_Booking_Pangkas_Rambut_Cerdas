@@ -9,6 +9,26 @@
         </div>
         <a class="btn primary" href="{{ url_for('walkin') }}">{{ icon("plus") }} Pelanggan langsung</a>
     </div>
+    <section class="panel notification-panel" id="notifikasi">
+        <div class="section-heading">
+            <div><span class="eyebrow">PEMBARUAN BOOKING</span><h2>{{ icon("bell") }} Notifikasi admin</h2></div>
+            <button class="btn outline small" type="button" data-notifications-read {% if not notification_data.unread %}disabled{% endif %}>Tandai sudah dibaca</button>
+        </div>
+        {% if mail_mode == 'demo' %}<div class="notice">Email admin masih dalam mode simulasi. Aktifkan MAIL_MODE=smtp dan konfigurasi SMTP di Vercel untuk pengiriman sungguhan. Notifikasi dashboard dan perangkat tetap dapat digunakan.</div>{% endif %}
+        <p class="help" data-notifications-status>Pembaruan otomatis setiap 30 detik saat halaman aktif, untuk semua tanggal booking.</p>
+        <div data-notifications-list data-latest-id="{{ notification_data.latest_id }}">
+            {% for n in notification_data['items'] %}
+            <a class="notification-item {{ 'is-unread' if not n.read_at else '' }}" href="{{ url_for('booking_detail',token=n.token) }}"><strong>{{ n.title }}</strong><span>{{ n.body }}</span><small>{{ n.created|when }} WIB</small></a>
+            {% else %}<p class="muted">Belum ada notifikasi. Booking baru, perubahan, dan pembatalan pelanggan akan muncul di sini.</p>{% endfor %}
+        </div>
+        <div class="notification-device">
+            <div><b>Notifikasi browser / HP</b><p class="help">Aktifkan pada perangkat admin ini. Di iPhone/iPad, tambahkan website ke Layar Utama lalu buka dari sana.</p></div>
+            <button class="btn outline small" type="button" data-push-enable>Aktifkan notifikasi perangkat</button>
+            <button class="btn outline small" type="button" data-push-disable>Nonaktifkan perangkat ini</button>
+        </div>
+        <p class="help" data-push-status role="status">Maksimal tiga perangkat. Email pemberitahuan dikirim ke email akun admin aktif jika SMTP sudah dikonfigurasi.</p>
+        <p class="help" data-notification-announcement role="status" aria-live="polite"></p>
+    </section>
     <div class="stats">
         <div class="stat">
             <span>Total jadwal</span>

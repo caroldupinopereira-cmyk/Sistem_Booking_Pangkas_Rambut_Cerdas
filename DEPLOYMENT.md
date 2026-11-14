@@ -120,3 +120,21 @@ Daftar slot mengambil interval sibuk dengan lima query per tanggal/kapster.
 Di Vercel, startup hanya memeriksa tabel yang sudah tersedia; pembuatan tabel dan
 migrasi dijalankan terlebih dahulu melalui aplikasi lokal dengan konfigurasi Turso.
 Jangan deploy ke database kosong sebelum inisialisasi lokal selesai.
+
+## Notifikasi admin: migrasi dan uji perangkat
+
+Versi notifikasi memerlukan tabel admin_notifications, push_subscriptions, dan
+push_deliveries. Buat melalui init_db/create_app dari terminal lokal sebelum deploy.
+Migrasi menambah tabel, tidak menghapus booking atau membuat ulang akun admin.
+Inbox hanya mencatat peristiwa baru. Email ditujukan ke akun admin saat pengiriman.
+
+Tidak diperlukan variabel VAPID baru: kunci push dibuat saat admin mengaktifkan
+perangkat dan disimpan di settings database. Browser menerima kunci publik saja.
+Jangan mengekspor settings database atau menampilkan nilai _push_private_key.
+Kunci privat tidak dimasukkan ke halaman HTML atau respons JSON.
+
+Setelah deploy: masuk admin, aktifkan perangkat dan izinkan notifikasi. Pada iOS,
+tambahkan ke Layar Utama lalu buka dari ikon tersebut. Buat booking percobaan dari
+akun pelanggan dan periksa inbox, email admin, serta pemberitahuan perangkat.
+Uji push nyata memerlukan tindakan izin pengguna; tes otomatis memakai pengiriman
+mock. Jangan mengklaim pengiriman OS sudah diuji hanya karena tes otomatis lulus.

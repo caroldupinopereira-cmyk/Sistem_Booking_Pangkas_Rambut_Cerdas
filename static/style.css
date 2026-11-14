@@ -1745,3 +1745,11 @@ body{font-family:"Segoe UI",Arial,sans-serif;font-size:17px}h1,h2,h3,.brand{font
 .back-link,.table-link{display:inline-flex;align-items:center;gap:6px}
 .text-btn>.icon{width:17px;height:17px;margin-right:4px}
 .sidebar a>span>.icon{width:21px;height:21px}
+
+.admin-bell{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px;border:1px solid #8da2b9;border-radius:50%;color:#fff}
+.admin-bell .icon{width:21px;height:21px}.notification-count{position:absolute;top:-6px;right:-7px;background:#c73543;color:#fff;border:2px solid #173b63;border-radius:20px;font-size:11px;line-height:18px;min-width:21px;padding:0 4px;text-align:center}
+.notification-count[hidden]{display:none}.notification-panel h2 .icon{color:var(--blue);width:24px;height:24px}
+.notification-item{display:flex;flex-direction:column;gap:5px;padding:15px 17px;margin:8px 0;border:1px solid #dce4ed;border-left:3px solid #dce4ed;border-radius:8px;overflow-wrap:anywhere;color:var(--ink,#173b63)}
+.notification-item:hover{background:#f5f8fc}.notification-item.is-unread{background:#f0f5fb;border-left-color:#c73543}.notification-item span{font-size:14px}.notification-item small{color:#596b7d}
+.notification-device{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-top:1px solid #dce4ed;margin-top:20px;padding-top:20px}.notification-device>div{flex:1;min-width:190px}
+@media(max-width:600px){.notification-panel .section-heading{align-items:flex-start;gap:12px;flex-direction:column}.notification-device button{width:100%}.admin-bell{min-width:34px;min-height:34px}}

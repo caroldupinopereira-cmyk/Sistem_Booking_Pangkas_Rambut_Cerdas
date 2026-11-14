@@ -595,5 +595,172 @@ class BookingTests(unittest.TestCase):
         self.assertTrue(hosted.config["TESTING"])
 
 
+    def push_subscription(self, suffix="1"):
+        import base64
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives import serialization
+        public = ec.generate_private_key(ec.SECP256R1()).public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        return {"endpoint": "https://fcm.googleapis.com/fcm/send/test-"+suffix, "keys": {"p256dh": base64.urlsafe_b64encode(public).decode().rstrip("="), "auth": base64.urlsafe_b64encode(b"x"*16).decode().rstrip("=")}}
+
+    def test_admin_inbox_events_and_failed_booking_rollback(self):
+        self.login()
+        token = self.make()
+        change_booking(self.path, token, "reschedule", "2026-10-10T14:00:00")
+        change_booking(self.path, token, "cancel")
+        self.make("2026-10-10T15:00:00", source="walkin")
+        response = self.client.get("/admin/notifications")
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json["unread"],3)
+        self.assertEqual(response.json["items"][0]["title"],"Booking dibatalkan")
+        self.assertNotIn("_push_private_key",response.get_data(as_text=True))
+        with patch("booking.queue",side_effect=RuntimeError("queue failed")):
+            with self.assertRaises(RuntimeError):
+                self.make("2026-10-10T16:00:00")
+        self.assertEqual(self.client.get("/admin/notifications").json["unread"],3)
+
+    def test_admin_notification_read_is_bounded_and_protected(self):
+        self.assertEqual(self.client.get("/admin/notifications").status_code,302)
+        self.assertEqual(self.client.post("/admin/notifications/read").status_code,400)
+        self.login()
+        self.make()
+        seen=self.client.get("/admin/notifications").json["latest_id"]
+        self.make("2026-10-11T10:00:00")
+        self.assertEqual(self.post("/admin/notifications/read",{"through_id":seen}).status_code,200)
+        self.assertEqual(self.client.get("/admin/notifications").json["unread"],1)
+
+    def test_admin_email_sent_once_independent_of_customer_consent(self):
+        from notifications import process_admin_notifications
+        self.login()
+        self.make(consent="0")
+        with patch("messaging._send_smtp", return_value=None) as sender:
+            self.assertEqual(process_admin_notifications(self.path,self._smtp_config()),1)
+            self.assertEqual(process_admin_notifications(self.path,self._smtp_config()),0)
+            sender.assert_called_once()
+            self.assertEqual(sender.call_args.args[1],"admin@example.com")
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT email_status FROM admin_notifications").fetchone()[0],"accepted")
+
+    def test_push_keys_subscribe_and_private_key_not_exposed(self):
+        import json
+        self.login()
+        result=self.post("/admin/notifications/push-key",{})
+        self.assertEqual(result.status_code,200)
+        key=result.json["public_key"]
+        self.assertEqual(self.post("/admin/notifications/push-key",{}).json["public_key"],key)
+        self.assertEqual(set(result.json),{"public_key"})
+        subscription=self.push_subscription()
+        self.assertEqual(self.post("/admin/notifications/subscribe",{"subscription":json.dumps(subscription)}).status_code,200)
+        self.assertEqual(self.post("/admin/notifications/subscribe",{"subscription":json.dumps(subscription)}).status_code,200)
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM push_subscriptions").fetchone()[0],1)
+        self.assertEqual(self.post("/admin/notifications/unsubscribe",{"endpoint":subscription["endpoint"]}).status_code,200)
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT active FROM push_subscriptions").fetchone()[0],0)
+
+    def test_push_rejects_internal_endpoint_and_limits_devices(self):
+        import json
+        self.login()
+        invalid=self.push_subscription()
+        invalid["endpoint"]="https://127.0.0.1/private"
+        self.assertEqual(self.post("/admin/notifications/subscribe",{"subscription":json.dumps(invalid)}).status_code,400)
+        for index in range(3):
+            self.assertEqual(self.post("/admin/notifications/subscribe",{"subscription":json.dumps(self.push_subscription(str(index)))}).status_code,200)
+        self.assertEqual(self.post("/admin/notifications/subscribe",{"subscription":json.dumps(self.push_subscription("4"))}).status_code,400)
+
+    def test_push_delivery_and_admin_rotation(self):
+        import json
+        from notifications import process_admin_notifications
+        from admin_account import replace_admin
+        self.login()
+        self.post("/admin/notifications/push-key",{})
+        self.post("/admin/notifications/subscribe",{"subscription":json.dumps(self.push_subscription())})
+        self.make()
+        with patch("notifications._send_push") as push, patch("messaging._send_smtp", return_value=None):
+            process_admin_notifications(self.path,self._smtp_config())
+            process_admin_notifications(self.path,self._smtp_config())
+            push.assert_called_once()
+        self.make("2026-10-11T10:00:00")
+        replace_admin(self.path,"x"*32,"x"*32,"new@example.com","new-password-admin")
+        with patch("notifications._send_push") as push, patch("messaging._send_smtp",return_value=None) as sender:
+            process_admin_notifications(self.path,self._smtp_config())
+            push.assert_not_called()
+            self.assertEqual(sender.call_args.args[1],"new@example.com")
+
+    def test_admin_delivery_interruption_is_not_retried(self):
+        from notifications import process_admin_notifications
+        self.login()
+        self.make()
+        with patch("messaging._send_smtp",side_effect=SystemExit()):
+            with self.assertRaises(SystemExit):
+                process_admin_notifications(self.path,self._smtp_config())
+        with patch("messaging._send_smtp") as sender:
+            self.assertEqual(process_admin_notifications(self.path,self._smtp_config()),0)
+            sender.assert_not_called()
+
+    def test_push_payload_is_private_and_real_key_can_sign(self):
+        import json
+        from notifications import ensure_push_keys,_send_push
+        self.login()
+        with connect(self.path) as db:
+            ensure_push_keys(db)
+            private=db.execute("SELECT value FROM settings WHERE key='_push_private_key'").fetchone()[0]
+        with patch("pywebpush.webpush") as sender:
+            _send_push(json.dumps(self.push_subscription()),private,"admin@example.com","Booking baru",1)
+            payload=json.loads(sender.call_args.kwargs["data"])
+            self.assertEqual(payload["url"],"/admin#notifikasi")
+            self.assertNotIn("pelanggan@example.com",payload["body"])
+
+    def test_service_worker_and_manifest(self):
+        response=self.client.get("/sw.js")
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.headers["Service-Worker-Allowed"],"/")
+        self.assertIn("showNotification",response.get_data(as_text=True))
+        response.close()
+        self.assertEqual(self.client.get("/manifest.webmanifest").json["start_url"],"/admin")
+
+
+    def test_admin_email_concurrent_processing_is_not_duplicated(self):
+        from notifications import process_admin_notifications
+        self.login()
+        self.make()
+        barrier=threading.Barrier(2)
+        def process(_):
+            barrier.wait()
+            process_admin_notifications(self.path,self._smtp_config())
+        with patch("messaging._send_smtp",return_value=None) as sender:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                list(pool.map(process,range(2)))
+            self.assertEqual(sender.call_count,1)
+
+    def test_expired_push_disables_subscription(self):
+        import json
+        from types import SimpleNamespace
+        from notifications import process_admin_notifications
+        self.login()
+        self.post("/admin/notifications/push-key",{})
+        self.post("/admin/notifications/subscribe",{"subscription":json.dumps(self.push_subscription())})
+        self.make()
+        failure=RuntimeError("expired")
+        failure.response=SimpleNamespace(status_code=410)
+        with patch("messaging._send_smtp",return_value=None), patch("notifications._send_push",side_effect=failure):
+            process_admin_notifications(self.path,self._smtp_config())
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT active FROM push_subscriptions").fetchone()[0],0)
+            self.assertEqual(db.execute("SELECT status FROM push_deliveries").fetchone()[0],"expired")
+
+
+    def test_push_delivery_does_not_require_email_smtp_mode(self):
+        import json
+        from notifications import process_admin_notifications
+        self.login()
+        self.post("/admin/notifications/push-key",{})
+        self.post("/admin/notifications/subscribe",{"subscription":json.dumps(self.push_subscription())})
+        self.make()
+        with patch("notifications._send_push") as sender, patch("messaging._send_smtp") as email:
+            process_admin_notifications(self.path,{"MAIL_MODE":"demo"})
+            sender.assert_called_once()
+            email.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

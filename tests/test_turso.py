@@ -25,7 +25,7 @@ class TursoAdapterTests(BaseBookingTests):
             connection.execute("PRAGMA foreign_keys=ON")
             return connection
 
-        for module in ("database", "app", "booking", "messaging", "test_app"):
+        for module in ("database", "app", "booking", "messaging", "notifications", "test_app"):
             self.driver_patches.enter_context(patch(module + ".connect", side_effect=driver_connect))
         super().setUp()
 

@@ -136,3 +136,29 @@ Sesi lama dibatalkan pada request berikutnya, termasuk jika email tidak berubah.
 Jika kode hilang, pemilik akses konfigurasi server dapat menggantinya di .env.
 Tidak ada endpoint publik untuk mengganti admin. Integrasi database online untuk
 Vercel masih harus diselesaikan sebelum perintah ini bisa mengubah database hosting.
+
+## Notifikasi admin
+
+- Lonceng dan daftar notifikasi untuk booking online baru, perubahan, serta pembatalan
+  oleh pelanggan; berlaku untuk semua tanggal. Pembaruan setiap 30 detik saat tab aktif.
+- Tombol tandai dibaca tersimpan di database dan berlaku di seluruh perangkat admin.
+- Email dikirim ke alamat akun admin aktif melalui SMTP yang sudah dikonfigurasi.
+- Aktifkan notifikasi browser/HP dari dashboard lalu berikan izin pada browser.
+  Di iPhone/iPad, gunakan website yang ditambahkan ke Layar Utama (iOS 16.4+).
+- Maksimal tiga subscription perangkat aktif. Ganti akun/password admin akan
+  menonaktifkan subscription lama. Logout biasa tidak mencabut izin push perangkat;
+  gunakan tombol Nonaktifkan perangkat ini jika diperlukan.
+- Kunci Web Push dibuat dan disimpan pribadi di settings Turso saat aktivasi pertama.
+  Isi push pada layar kunci tidak memuat nama, email, atau tautan pribadi pelanggan.
+- Fitur mencatat peristiwa sejak dipasang; histori lama tidak dikirim ulang.
+- Pengiriman yang statusnya tidak pasti tidak dicoba ulang otomatis. Inbox dashboard
+  tetap tersedia meskipun email/push gagal. Push memerlukan HTTPS dan dukungan browser;
+  pengiriman OS tidak dijamin ketika perangkat offline atau notifikasi diblokir.
+- Pada Vercel, email transaksi dan notifikasi admin diproses saat perubahan booking.
+  Pemanggil cron atau tombol Proses pesan jatuh tempo dapat memproses backlog.
+
+Sebelum deploy versi ini ke database lama, jalankan aplikasi lokal yang terhubung
+ke Turso sekali untuk membuat tabel tambahan; data booking tidak dihapus.
+
+Push perangkat berjalan terpisah dari mode email. Untuk simulasi push pengujian,
+set PUSH_MODE=demo; default live hanya mengirim ke perangkat yang telah didaftarkan admin.

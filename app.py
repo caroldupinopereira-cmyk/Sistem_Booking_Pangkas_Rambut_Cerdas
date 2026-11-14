@@ -13,6 +13,7 @@ from flask import (
     flash,
     jsonify,
     abort,
+    send_from_directory,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import connect, init_db, settings, TursoDatabase
@@ -32,6 +33,7 @@ from booking import (
 )
 from messaging import process_messages, send_verification_code
 from analytics import insights
+from notifications import inbox, mark_read, ensure_push_keys, save_subscription, process_admin_notifications
 
 ROOT = Path(__file__).resolve().parent
 STATUS = {
@@ -103,6 +105,7 @@ def create_app(test_config=None):
         "TURSO_DATABASE_URL",
         "TURSO_AUTH_TOKEN",
         "MAIL_MODE",
+        "PUSH_MODE",
         "SMTP_HOST",
         "SMTP_PORT",
         "SMTP_USER",
@@ -249,6 +252,7 @@ def create_app(test_config=None):
             if request.endpoint in {"dasbor_booking", "change", "walkin", "admin_booking"}:
                 try:
                     process_messages(app.config["DATABASE"], app.config, limit=1, include_reminders=False)
+                    process_admin_notifications(app.config["DATABASE"], app.config, limit=1)
                 except Exception:
                     app.logger.error("Outbox tertunda; periksa Pesan Email atau scheduler.")
         return response
@@ -259,6 +263,7 @@ def create_app(test_config=None):
         if len(secret) < 32 or not secrets.compare_digest(request.headers.get("Authorization", ""), "Bearer " + secret):
             abort(401)
         count = process_messages(app.config["DATABASE"], app.config, limit=1)
+        count += process_admin_notifications(app.config["DATABASE"], app.config, limit=1)
         response = jsonify(processed=count)
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -751,6 +756,60 @@ def create_app(test_config=None):
         session.clear()
         return redirect(url_for("home"))
 
+    @app.route("/sw.js")
+    def service_worker():
+        response = send_from_directory(ROOT / "static", "sw.js", mimetype="application/javascript")
+        response.headers["Service-Worker-Allowed"] = "/"
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+    @app.route("/manifest.webmanifest")
+    def manifest():
+        return jsonify(name="Ruang Pangkas Admin", short_name="Ruang Pangkas", start_url="/admin", scope="/", display="standalone", theme_color="#173b63", background_color="#ffffff", icons=[{"src":"/static/admin-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}])
+
+    @app.route("/admin/notifications")
+    @admin_only
+    def admin_notifications():
+        with db() as c:
+            return jsonify(inbox(c))
+
+    @app.route("/admin/notifications/read", methods=["POST"])
+    @admin_only
+    def admin_notifications_read():
+        try:
+            through_id = int(request.form.get("through_id", "0"))
+        except ValueError:
+            abort(400, description="Nomor notifikasi tidak valid.")
+        with db() as c:
+            mark_read(c, through_id, stamp(now()))
+        return jsonify(ok=True)
+
+    @app.route("/admin/notifications/push-key", methods=["POST"])
+    @admin_only
+    def admin_push_key():
+        with db() as c:
+            c.execute("BEGIN IMMEDIATE")
+            return jsonify(public_key=ensure_push_keys(c))
+
+    @app.route("/admin/notifications/subscribe", methods=["POST"])
+    @admin_only
+    def admin_subscribe():
+        try:
+            payload = json.loads(request.form.get("subscription", "{}"))
+            with db() as c:
+                c.execute("BEGIN IMMEDIATE")
+                save_subscription(c,payload,session["admin"],stamp(now()))
+            return jsonify(ok=True)
+        except (ValueError,TypeError):
+            return jsonify(error="Perangkat tidak dapat disimpan. Periksa dukungan browser dan batas tiga perangkat."),400
+
+    @app.route("/admin/notifications/unsubscribe", methods=["POST"])
+    @admin_only
+    def admin_unsubscribe():
+        with db() as c:
+            c.execute("UPDATE push_subscriptions SET active=0 WHERE endpoint=?", (request.form.get("endpoint", ""),))
+        return jsonify(ok=True)
+
     @app.route("/admin")
     @admin_only
     def dashboard():
@@ -764,9 +823,10 @@ def create_app(test_config=None):
                 "SELECT b.*,s.name service_name,k.name barber_name FROM bookings b JOIN services s ON s.id=b.service_id JOIN barbers k ON k.id=b.barber_id WHERE substr(b.start,1,10)=? ORDER BY b.start",
                 (date,),
             ).fetchall()
+            notification_data = inbox(c)
         counts = {s: sum(b["status"] == s for b in rows) for s in STATUS}
         revenue = sum(b["paid"] or 0 for b in rows if b["status"] == "completed")
-        return render_template("dashboard.html", rows=rows, date=date, counts=counts, revenue=revenue)
+        return render_template("dashboard.html", rows=rows, date=date, counts=counts, revenue=revenue, notification_data=notification_data)
 
     @app.route("/admin/walkin", methods=["GET", "POST"])
     @admin_only
@@ -899,6 +959,7 @@ def create_app(test_config=None):
         if request.method == "POST":
             try:
                 n = process_messages(app.config["DATABASE"], app.config)
+                n += process_admin_notifications(app.config["DATABASE"], app.config, limit=5)
                 flash(f"{n} pesan jatuh tempo diproses. Periksa status di bawah.", "success")
             except Exception:
                 flash("Pemrosesan tertunda; coba lagi setelah beberapa saat.", "error")
@@ -967,6 +1028,7 @@ if __name__ == "__main__":
         while True:
             try:
                 process_messages(app.config["DATABASE"], app.config)
+                process_admin_notifications(app.config["DATABASE"], app.config, limit=5)
             except Exception:
                 logging.exception("Outbox tertunda")
             time.sleep(15)

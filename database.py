@@ -46,6 +46,23 @@ CREATE TABLE IF NOT EXISTS promos (id INTEGER PRIMARY KEY,date TEXT NOT NULL,sta
 """
 
 
+SCHEMA += """
+CREATE TABLE IF NOT EXISTS admin_notifications (
+ id INTEGER PRIMARY KEY,history_id INTEGER UNIQUE NOT NULL REFERENCES history(id),
+ booking_id INTEGER NOT NULL REFERENCES bookings(id),title TEXT NOT NULL,body TEXT NOT NULL,
+ created TEXT NOT NULL,read_at TEXT,email_status TEXT NOT NULL DEFAULT 'pending',email_error TEXT NOT NULL DEFAULT '');
+CREATE INDEX IF NOT EXISTS admin_notifications_unread ON admin_notifications(read_at,id);
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+ id INTEGER PRIMARY KEY,endpoint TEXT UNIQUE NOT NULL,subscription TEXT NOT NULL,
+ admin_id INTEGER NOT NULL REFERENCES admins(id),credential TEXT NOT NULL,created TEXT NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS push_deliveries (
+ id INTEGER PRIMARY KEY,notification_id INTEGER NOT NULL REFERENCES admin_notifications(id),
+ subscription_id INTEGER NOT NULL REFERENCES push_subscriptions(id),status TEXT NOT NULL DEFAULT 'pending',
+ UNIQUE(notification_id,subscription_id));
+"""
+
+
 class Connection(sqlite3.Connection):
     def __exit__(self, *args):
         try:
@@ -134,7 +151,19 @@ class RemoteConnection:
             self.execute(statement)
 
     def commit(self):
-        self._connection.commit()
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                self._connection.commit()
+                return
+            except ValueError as error:
+                message = str(error).lower()
+                # SQLite keeps the transaction active after COMMIT returns BUSY.
+                # Retry only that definite lock failure, never network ambiguity.
+                if ("locked" in message or "sqlite_busy" in message) and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                    continue
+                raise sqlite3.DatabaseError("Commit database Turso gagal.") from None
 
     def rollback(self):
         self._connection.rollback()

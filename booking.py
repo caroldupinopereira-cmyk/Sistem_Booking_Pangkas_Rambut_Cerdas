@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import re, secrets
 from database import connect, settings
+from notifications import record_event
 
 ACTIVE = ("scheduled", "arrived", "serving")
 RESERVED = ("scheduled", "arrived", "serving", "completed")
@@ -40,10 +41,12 @@ def normalize_email(value, required=True):
 
 
 def record(db, bid, action, actor, old=None, new=None):
-    db.execute(
+    created = stamp(now())
+    cursor = db.execute(
         "INSERT INTO history(booking_id,action,actor,old_start,new_start,created) VALUES (?,?,?,?,?,?)",
-        (bid, action, actor, old, new, stamp(now())),
+        (bid, action, actor, old, new, created),
     )
+    record_event(db, cursor.lastrowid, bid, action, actor, created)
 
 
 def validate_slot(db, barber_id, start, duration, exclude=None, at=None):

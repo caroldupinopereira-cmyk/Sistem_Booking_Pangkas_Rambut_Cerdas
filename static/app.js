@@ -113,3 +113,91 @@ document.querySelectorAll('[data-copy-link]').forEach(button => button.addEventL
         result.textContent = 'Salin alamat halaman ini dari kolom alamat browser.';
     }
 }));
+
+// Admin inbox polls only while visible; messages are rendered as text, never HTML.
+(() => {
+    const bell = document.querySelector('[data-admin-notifications]');
+    if (!bell) return;
+    const badge = bell.querySelector('[data-notification-count]');
+    const list = document.querySelector('[data-notifications-list]');
+    const read = document.querySelector('[data-notifications-read]');
+    const status = document.querySelector('[data-notifications-status]');
+    const pushStatus = document.querySelector('[data-push-status]');
+    const announce = document.querySelector('[data-notification-announcement]');
+    let latest = Number(list?.dataset.latestId || 0), previous = null, pending = false;
+    async function post(url, data = {}) {
+        const response = await fetch(url, {method:'POST',headers:{Accept:'application/json'},body:new URLSearchParams({csrf:bell.dataset.csrf,...data})});
+        if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Sesi admin berakhir. Masuk kembali untuk melanjutkan.');
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Permintaan belum berhasil. Muat ulang halaman dan coba lagi.');
+        return result;
+    }
+    async function refresh() {
+        if (document.hidden || pending) return;
+        pending = true;
+        try {
+            const response = await fetch('/admin/notifications',{cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
+            if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error();
+            const data = await response.json();
+            latest = data.latest_id;
+            badge.textContent = data.unread > 99 ? '99+' : String(data.unread);
+            badge.hidden = !data.unread;
+            bell.setAttribute('aria-label',`${data.unread} notifikasi admin belum dibaca`);
+            if (read) read.disabled = !data.unread;
+            if (previous !== null && latest > previous && announce) announce.textContent = 'Ada pembaruan booking baru. Periksa daftar notifikasi.';
+            previous = latest;
+            if (list) {
+                list.replaceChildren();
+                for (const item of data.items) {
+                    const link = document.createElement('a');
+                    link.className = 'notification-item' + (item.read_at ? '' : ' is-unread');
+                    link.href = '/booking/' + encodeURIComponent(item.token);
+                    for (const [tag,text] of [['strong',item.title],['span',item.body],['small',item.created.replace('T',' ')+' WIB']]) {
+                        const node = document.createElement(tag);node.textContent = text;link.append(node);
+                    }
+                    list.append(link);
+                }
+                if (!data.items.length) {const empty=document.createElement('p');empty.className='muted';empty.textContent='Belum ada notifikasi pelanggan.';list.append(empty);}
+            }
+            if (status) status.textContent = 'Terhubung. Pembaruan otomatis setiap 30 detik saat halaman aktif.';
+        } catch {
+            if (status) status.textContent = 'Pembaruan belum berhasil. Jika sesi berakhir, masuk kembali. Akan dicoba lagi otomatis.';
+        } finally { pending = false; }
+    }
+    read?.addEventListener('click', async () => {
+        read.disabled = true;
+        try {await post('/admin/notifications/read',{through_id:latest});await refresh();}
+        catch(error){if(status)status.textContent=error.message;read.disabled=false;}
+    });
+    const supported = window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    document.querySelector('[data-push-enable]')?.addEventListener('click', async event => {
+        const button=event.currentTarget;button.disabled=true;
+        try {
+            if (!supported) throw new Error('Browser belum mendukung push. Di iPhone/iPad, tambahkan ke Layar Utama dan buka aplikasi dari sana.');
+            if (await Notification.requestPermission() !== 'granted') throw new Error('Izin belum diberikan. Atur izin notifikasi website pada browser jika ingin mengaktifkannya.');
+            await navigator.serviceWorker.register('/sw.js');
+            const registration=await navigator.serviceWorker.ready;
+            const key=await post('/admin/notifications/push-key');
+            const bytes=Uint8Array.from(atob(key.public_key.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-key.public_key.length%4)%4)),character=>character.charCodeAt(0));
+            let subscription=await registration.pushManager.getSubscription();
+            if(!subscription) subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
+            await post('/admin/notifications/subscribe',{subscription:JSON.stringify(subscription.toJSON())});
+            pushStatus.textContent='Notifikasi perangkat aktif. Booking pelanggan berikutnya akan mengirim pemberitahuan ke perangkat ini.';
+        } catch(error) {pushStatus.textContent=error.message;}
+        finally {button.disabled=false;}
+    });
+    document.querySelector('[data-push-disable]')?.addEventListener('click',async event=>{
+        const button=event.currentTarget;button.disabled=true;
+        try {
+            if(!supported)throw new Error('Push tidak tersedia pada browser ini.');
+            const registration=await navigator.serviceWorker.getRegistration('/');
+            const subscription=registration && await registration.pushManager.getSubscription();
+            if(subscription){await post('/admin/notifications/unsubscribe',{endpoint:subscription.endpoint});await subscription.unsubscribe();}
+            pushStatus.textContent='Notifikasi perangkat ini dinonaktifkan.';
+        }catch(error){pushStatus.textContent=error.message;}
+        finally{button.disabled=false;}
+    });
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+    setInterval(refresh,30000);
+    refresh();
+})();

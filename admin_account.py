@@ -23,6 +23,7 @@ def replace_admin(path, configured_code, supplied_code, email, password):
         if len(accounts) != 1:
             raise ValueError("Harus ada tepat satu akun admin. Gunakan /setup untuk akun pertama.")
         db.execute("UPDATE admins SET email=?, password=? WHERE id=?", (email, password_hash, accounts[0]["id"]))
+        db.execute("UPDATE push_subscriptions SET active=0 WHERE admin_id=?", (accounts[0]["id"],))
 
 
 def main():

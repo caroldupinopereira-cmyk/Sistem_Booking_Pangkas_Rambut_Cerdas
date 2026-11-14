@@ -4,6 +4,7 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
+        {% if is_admin %}<link rel="manifest" href="{{ url_for('manifest') }}">{% endif %}
         <title>{% block title %}{{ shop.shop_name }}{% endblock %} · Booking Pangkas</title>
         <link rel="stylesheet" href="{{ url_for('static',filename='style.css',v=asset_version) }}">
         <script src="{{ url_for('static',filename='app.js',v=script_version) }}" defer></script>
@@ -28,6 +29,7 @@
                     <a href="{{ url_for('masuk') }}">Masuk / Daftar</a>
                 {% endif %}
                 {% if is_admin %}
+                    <a class="admin-bell" href="{{ url_for('dashboard') }}#notifikasi" data-admin-notifications data-csrf="{{ csrf() }}" aria-label="Notifikasi admin">{{ icon("bell") }}<span class="notification-count" data-notification-count hidden>0</span></a>
                     <a class="nav-pill" href="{{ url_for('dashboard') }}">Dashboard admin {{ icon("dashboard") }}</a>
                     <form action="{{ url_for('logout') }}" method="post">
                         {{ csrf_field() }}<button class="text-btn" type="submit">{{ icon("logout") }} Keluar admin</button>
