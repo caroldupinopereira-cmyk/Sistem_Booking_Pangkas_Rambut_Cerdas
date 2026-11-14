@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Verifikasi email{% endblock %}
+{% block content %}
+<section class="auth-wrap">
+    <div class="auth-art">
+        <span class="eyebrow">VERIFIKASI EMAIL</span>
+        <h1>Satu langkah<br><em>lagi.</em></h1>
+        <p>Masukkan kode 6 digit yang dikirim ke email Anda. Kode berlaku 10 menit.</p>
+        <span class="auth-scissors">✂</span>
+    </div>
+    <div class="auth-form">
+        <span class="eyebrow">KODE VERIFIKASI</span>
+        <h2>Verifikasi email.</h2>
+        <form method="post">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="verify">
+            <label>Email<input name="email" type="email" maxlength="120" value="{{ email }}" required></label>
+            <label>Kode 6 digit<input name="code" inputmode="numeric" pattern="\d{6}" maxlength="6" placeholder="123456" required></label>
+            <button class="btn primary wide">Verifikasi & masuk ↗</button>
+        </form>
+        <form method="post" style="margin-top:10px">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="resend">
+            <input type="hidden" name="email" value="{{ email }}">
+            <button class="btn outline wide" type="submit">Kirim ulang kode</button>
+        </form>
+        <p class="help">Maksimal 5 kali salah per kode, tunggu 60 detik antar permintaan, maksimal 5 kode per jam.</p>
+        <a class="back-link" href="{{ url_for('masuk') }}">← Kembali ke masuk</a>
+    </div>
+</section>
+{% endblock %}

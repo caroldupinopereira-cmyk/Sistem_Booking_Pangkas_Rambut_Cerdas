@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Masuk pelanggan{% endblock %}
+{% block content %}
+<section class="auth-wrap">
+    <div class="auth-art">
+        <span class="eyebrow">AKUN PELANGGAN</span>
+        <h1>Masuk untuk<br><em>booking.</em></h1>
+        <p>Kelola jadwal, ubah booking, dan lihat riwayat di dasbor Anda.</p>
+        <span class="auth-scissors">✂</span>
+    </div>
+    <div class="auth-form">
+        <span class="eyebrow">MASUK</span>
+        <h2>Selamat datang kembali.</h2>
+        {% if google_enabled %}
+            <a class="btn outline wide" href="{{ url_for('auth_google') }}">Masuk dengan Google ↗</a>
+            <p class="help" style="text-align:center;margin:12px 0">atau masuk dengan email</p>
+        {% endif %}
+        <form method="post">
+            {{ csrf_field() }}
+            <label>Email<input name="email" type="email" maxlength="120" autocomplete="email" required></label>
+            <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+            <button class="btn primary wide">Masuk ke dasbor ↗</button>
+        </form>
+        <p class="help">Lupa password? Gunakan <b>Masuk dengan Google</b> jika akun Anda tertaut, atau hubungi admin.</p>
+        <p class="help">Belum punya akun? <a href="{{ url_for('daftar') }}">Daftar</a></p>
+        <a class="back-link" href="{{ url_for('home') }}">← Kembali ke beranda</a>
+    </div>
+</section>
+{% endblock %}
