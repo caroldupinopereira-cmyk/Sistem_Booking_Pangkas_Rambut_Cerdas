@@ -20,24 +20,55 @@ CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY,booking_id INTEGER NO
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY,booking_id INTEGER NOT NULL REFERENCES bookings(id),version INTEGER NOT NULL,kind TEXT NOT NULL,due TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',preview TEXT NOT NULL DEFAULT '',error TEXT NOT NULL DEFAULT '',provider_id TEXT,processed_at TEXT,UNIQUE(booking_id,version,kind));
 CREATE TABLE IF NOT EXISTS promos (id INTEGER PRIMARY KEY,date TEXT NOT NULL,start_time TEXT NOT NULL,end_time TEXT NOT NULL,label TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1);
 """
+
+
 class Connection(sqlite3.Connection):
- def __exit__(self,*args):
-  try:return super().__exit__(*args)
-  finally:self.close()
+    def __exit__(self, *args):
+        try:
+            return super().__exit__(*args)
+        finally:
+            self.close()
+
 
 def connect(path):
- db=sqlite3.connect(str(path),timeout=15,factory=Connection);db.row_factory=sqlite3.Row
- db.execute('PRAGMA foreign_keys=ON');db.execute('PRAGMA busy_timeout=15000');return db
+    db = sqlite3.connect(str(path), timeout=15, factory=Connection)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA foreign_keys=ON")
+    db.execute("PRAGMA busy_timeout=15000")
+    return db
+
 
 def init_db(path):
- Path(path).parent.mkdir(parents=True,exist_ok=True)
- with connect(path) as db:
-  db.executescript(SCHEMA)
-  defaults={'shop_name':'Ruang Pangkas','address':'Alamat belum diatur','admin_phone':'','tolerance':'','sample_settings':'1'}
-  db.executemany('INSERT OR IGNORE INTO settings VALUES (?,?)',defaults.items())
-  if not db.execute('SELECT 1 FROM services').fetchone():
-   db.executemany('INSERT INTO services(name,duration,price) VALUES (?,?,?)',[('Potong rambut',30,35000),('Potong + keramas',45,50000),('Rapikan jenggot',15,20000)])
-  if not db.execute('SELECT 1 FROM barbers').fetchone():db.executemany('INSERT INTO barbers(name) VALUES (?)',[('Kapster 1',),('Kapster 2',)])
-  for day in range(7):db.execute('INSERT OR IGNORE INTO hours VALUES (?,?,?,?,?,0)',(day,'09:00','20:00','12:00','13:00'))
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with connect(path) as db:
+        db.executescript(SCHEMA)
+        defaults = {
+            "shop_name": "Ruang Pangkas",
+            "address": "Alamat belum diatur",
+            "admin_phone": "",
+            "tolerance": "",
+            "sample_settings": "1",
+        }
+        db.executemany("INSERT OR IGNORE INTO settings VALUES (?,?)", defaults.items())
+        if not db.execute("SELECT 1 FROM services").fetchone():
+            db.executemany(
+                "INSERT INTO services(name,duration,price) VALUES (?,?,?)",
+                [
+                    ("Potong rambut", 30, 35000),
+                    ("Potong + keramas", 45, 50000),
+                    ("Rapikan jenggot", 15, 20000),
+                ],
+            )
+        if not db.execute("SELECT 1 FROM barbers").fetchone():
+            db.executemany(
+                "INSERT INTO barbers(name) VALUES (?)", [("Kapster 1",), ("Kapster 2",)]
+            )
+        for day in range(7):
+            db.execute(
+                "INSERT OR IGNORE INTO hours VALUES (?,?,?,?,?,0)",
+                (day, "09:00", "20:00", "12:00", "13:00"),
+            )
 
-def settings(db):return {r['key']:r['value'] for r in db.execute('SELECT * FROM settings')}
+
+def settings(db):
+    return {r["key"]: r["value"] for r in db.execute("SELECT * FROM settings")}
