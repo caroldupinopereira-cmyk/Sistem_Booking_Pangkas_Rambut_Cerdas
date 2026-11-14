@@ -1,0 +1,11 @@
+[project]
+name = "ruang-pangkas"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["Flask>=3.1,<4", "libsql==0.1.11"]
+
+[tool.vercel]
+entrypoint = "wsgi:app"
+
+[tool.vercel.scripts]
+build = "python build.py"

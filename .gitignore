@@ -9,3 +9,9 @@ work/
 *.sqlite3
 *.sqlite3-*
 secret.key
+
+.vercel/
+backup/
+backups/
+
+public/static/

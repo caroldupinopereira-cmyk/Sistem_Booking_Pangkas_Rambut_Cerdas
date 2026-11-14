@@ -15,7 +15,7 @@ from flask import (
     abort,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-from database import connect, init_db, settings
+from database import connect, init_db, settings, TursoDatabase
 from booking import (
     BookingError,
     now,
@@ -63,13 +63,21 @@ def create_app(test_config=None):
             if "=" in line and not line.lstrip().startswith("#"):
                 key, value = line.split("=", 1)
                 env[key.strip()] = value.strip().strip('"').strip("'")
+    # Hosting supplies a stable secret; local development keeps its existing key.
+    configured_secret = os.environ.get("SECRET_KEY") or env.get("SECRET_KEY")
+    if test_config and test_config.get("SECRET_KEY"):
+        configured_secret = test_config["SECRET_KEY"]
     instance = ROOT / "instance"
-    instance.mkdir(exist_ok=True)
-    secretfile = instance / "secret.key"
-    if not secretfile.exists():
-        secretfile.write_text(secrets.token_hex(32), encoding="utf-8")
+    if not configured_secret:
+        if os.environ.get("VERCEL") == "1":
+            raise RuntimeError("Isi SECRET_KEY di Environment Variables Vercel.")
+        instance.mkdir(exist_ok=True)
+        secretfile = instance / "secret.key"
+        if not secretfile.exists():
+            secretfile.write_text(secrets.token_hex(32), encoding="utf-8")
+        configured_secret = secretfile.read_text().strip()
     app.config.update(
-        SECRET_KEY=secretfile.read_text().strip(),
+        SECRET_KEY=configured_secret,
         DATABASE=str(instance / "barbershop.sqlite3"),
         MAIL_MODE="demo",
         SMTP_HOST="smtp.gmail.com",
@@ -82,11 +90,18 @@ def create_app(test_config=None):
         GOOGLE_CLIENT_SECRET="",
         GOOGLE_REDIRECT_URI="http://127.0.0.1:5000/auth/google/callback",
         MAX_CONTENT_LENGTH=65536,
+        TEMPLATES_AUTO_RELOAD=True,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
     )
     app.config.update(env)
     for key in [
+        "SECRET_KEY",
+        "ADMIN_CHANGE_CODE",
+        "CRON_SECRET",
+        "DATABASE",
+        "TURSO_DATABASE_URL",
+        "TURSO_AUTH_TOKEN",
         "MAIL_MODE",
         "SMTP_HOST",
         "SMTP_PORT",
@@ -102,6 +117,20 @@ def create_app(test_config=None):
             app.config[key] = os.environ[key]
     if test_config:
         app.config.update(test_config)
+    # Derive the stable HTTPS domain on Vercel unless explicitly configured.
+    production_domain = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL", "").strip()
+    if os.environ.get("VERCEL") == "1" and production_domain:
+        if not os.environ.get("PUBLIC_BASE_URL") and not env.get("PUBLIC_BASE_URL"):
+            app.config["PUBLIC_BASE_URL"] = "https://" + production_domain
+        if not os.environ.get("GOOGLE_REDIRECT_URI") and not env.get("GOOGLE_REDIRECT_URI"):
+            app.config["GOOGLE_REDIRECT_URI"] = app.config["PUBLIC_BASE_URL"].rstrip("/") + "/auth/google/callback"
+    app.config["SESSION_COOKIE_SECURE"] = str(app.config["PUBLIC_BASE_URL"]).startswith("https://")
+    if not (test_config and "DATABASE" in test_config):
+        turso_url = str(app.config.get("TURSO_DATABASE_URL", "")).strip()
+        if turso_url:
+            app.config["DATABASE"] = TursoDatabase(turso_url, str(app.config.get("TURSO_AUTH_TOKEN", "")).strip())
+    if os.environ.get("VERCEL") == "1" and not isinstance(app.config["DATABASE"], TursoDatabase):
+        raise RuntimeError("SQLite lokal tidak bisa dipakai di Vercel. Isi TURSO_DATABASE_URL dan TURSO_AUTH_TOKEN.")
     init_db(app.config["DATABASE"])
     with connect(app.config["DATABASE"]) as db:
         db.execute(
@@ -195,10 +224,37 @@ def create_app(test_config=None):
 
     @app.before_request
     def protect():
+        if session.get("admin"):
+            with db() as c:
+                account = c.execute("SELECT password FROM admins WHERE email=?", (session["admin"],)).fetchone()
+            fingerprint = hashlib.sha256(account["password"].encode()).hexdigest() if account else ""
+            if not fingerprint or not secrets.compare_digest(str(session.get("admin_credential", "")), fingerprint):
+                session.pop("admin", None)
+                session.pop("admin_credential", None)
         if request.method == "POST" and not secrets.compare_digest(
             str(request.form.get("csrf", "")), str(session.get("csrf", "missing"))
         ):
             abort(400, description="Form kedaluwarsa. Muat ulang halaman dan coba lagi.")
+
+    @app.after_request
+    def dispatch_serverless_email(response):
+        if os.environ.get("VERCEL") == "1" and request.method == "POST" and response.status_code < 400:
+            if request.endpoint in {"dasbor_booking", "change", "walkin", "admin_booking"}:
+                try:
+                    process_messages(app.config["DATABASE"], app.config, limit=1, include_reminders=False)
+                except Exception:
+                    app.logger.error("Outbox tertunda; periksa Pesan Email atau scheduler.")
+        return response
+
+    @app.route("/api/cron/messages")
+    def cron_messages():
+        secret = str(app.config.get("CRON_SECRET", ""))
+        if len(secret) < 32 or not secrets.compare_digest(request.headers.get("Authorization", ""), "Bearer " + secret):
+            abort(401)
+        count = process_messages(app.config["DATABASE"], app.config, limit=1)
+        response = jsonify(processed=count)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.after_request
     def headers(response):
@@ -224,6 +280,7 @@ def create_app(test_config=None):
             if cid:
                 cust = c.execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
         return dict(
+            asset_version=(ROOT / "static" / "style.css").stat().st_mtime_ns,
             shop=cfg,
             status_labels=STATUS,
             days=DAYS,
@@ -234,6 +291,7 @@ def create_app(test_config=None):
             has_admin=has_admin,
             google_enabled=google_enabled(),
             mail_mode=str(app.config.get("MAIL_MODE", "demo")).lower(),
+            database_online=isinstance(app.config["DATABASE"], TursoDatabase),
             today=now().date().isoformat(),
         )
 
@@ -642,12 +700,14 @@ def create_app(test_config=None):
                     c.execute("BEGIN IMMEDIATE")
                     if c.execute("SELECT 1 FROM admins").fetchone():
                         return redirect(url_for("login"))
+                    admin_password_hash = generate_password_hash(password)
                     c.execute(
                         "INSERT INTO admins(email,password) VALUES (?,?)",
-                        (email, generate_password_hash(password)),
+                        (email, admin_password_hash),
                     )
                 session.clear()
                 session["admin"] = email
+                session["admin_credential"] = hashlib.sha256(admin_password_hash.encode()).hexdigest()
                 flash("Akun admin dibuat. Sesuaikan pengaturan contoh sebelum digunakan.", "success")
                 return redirect(url_for("admin_settings"))
         return render_template("auth.html", setup=True)
@@ -671,6 +731,7 @@ def create_app(test_config=None):
             if a and check_password_hash(a["password"], request.form.get("password", "")):
                 session.clear()
                 session["admin"] = a["email"]
+                session["admin_credential"] = hashlib.sha256(a["password"].encode()).hexdigest()
                 return redirect(url_for("dashboard"))
             attempts.append(time.time())
             session["attempts"] = attempts

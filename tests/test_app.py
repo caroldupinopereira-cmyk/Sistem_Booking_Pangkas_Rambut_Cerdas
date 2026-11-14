@@ -84,8 +84,16 @@ class BookingTests(unittest.TestCase):
         return self.client.post(url, data={**data, "csrf": "test-csrf"})
 
     def login(self):
+        import hashlib
+        from werkzeug.security import generate_password_hash
+        with connect(self.path) as db:
+            admin = db.execute("SELECT * FROM admins").fetchone()
+            if not admin:
+                db.execute("INSERT INTO admins(email,password) VALUES (?,?)", ("admin@example.com", generate_password_hash("test-password-admin")))
+                admin = db.execute("SELECT * FROM admins").fetchone()
         with self.client.session_transaction() as s:
-            s["admin"] = "admin@example.com"
+            s["admin"] = admin["email"]
+            s["admin_credential"] = hashlib.sha256(admin["password"].encode()).hexdigest()
 
     def test_duplicate_and_overlapping_slots(self):
         self.make()
@@ -435,6 +443,114 @@ class BookingTests(unittest.TestCase):
                     row = db.execute("SELECT status,error FROM messages").fetchone()
                     self.assertEqual(row["status"], expected)
                     self.assertNotIn("app-password-rahasia", row["error"] or "")
+
+
+    def test_hosting_environment_and_https_cookie(self):
+        with patch.dict("os.environ", {
+            "SECRET_KEY": "hosting-test-secret",
+            "DATABASE": str(self.path),
+            "PUBLIC_BASE_URL": "https://booking.example.com",
+            "VERCEL": "0",
+            "TURSO_DATABASE_URL": "",
+        }):
+            hosted = create_app({"TESTING": True, "MAIL_MODE": "demo"})
+        self.assertEqual(hosted.config["SECRET_KEY"], "hosting-test-secret")
+        self.assertEqual(hosted.config["DATABASE"], str(self.path))
+        self.assertTrue(hosted.config["SESSION_COOKIE_SECURE"])
+        self.assertFalse(self.app.config["SESSION_COOKIE_SECURE"])
+
+    def test_vercel_rejects_local_database_before_initialization(self):
+        with patch.dict("os.environ", {"VERCEL": "1", "SECRET_KEY": "hosting-test-secret"}):
+            with patch("app.init_db") as initialize:
+                with self.assertRaisesRegex(RuntimeError, "SQLite lokal"):
+                    create_app({"TESTING": True, "DATABASE": str(self.path)})
+                initialize.assert_not_called()
+
+
+    def test_admin_singleton_and_setup_closed(self):
+        import sqlite3
+        self.login()
+        with self.assertRaises(sqlite3.IntegrityError):
+            with connect(self.path) as db:
+                db.execute("INSERT INTO admins(email,password) VALUES (?,?)", ("second@example.com", "hash"))
+        self.assertEqual(self.post("/setup", {"email": "second@example.com", "password": "another-password"}).status_code, 302)
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM admins").fetchone()[0], 1)
+
+    def test_admin_replacement_requires_code_and_invalidates_sessions(self):
+        from admin_account import replace_admin
+        from werkzeug.security import check_password_hash
+        self.login()
+        code = "test-special-code-" + "x" * 32
+        with self.assertRaisesRegex(ValueError, "tidak cocok"):
+            replace_admin(self.path, code, "wrong", "new@example.com", "new-password-admin")
+        self.assertEqual(self.client.get("/admin").status_code, 200)
+        replace_admin(self.path, code, code, "admin@example.com", "new-password-admin")
+        self.assertEqual(self.client.get("/admin").status_code, 302)
+        with connect(self.path) as db:
+            account = db.execute("SELECT * FROM admins").fetchone()
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM admins").fetchone()[0], 1)
+            self.assertTrue(check_password_hash(account["password"], "new-password-admin"))
+        self.assertEqual(self.post("/login", {"email": "admin@example.com", "password": "new-password-admin"}).status_code, 302)
+        self.assertEqual(self.client.get("/admin").status_code, 200)
+        replace_admin(self.path, code, code, "new@example.com", "final-password-admin")
+        self.assertEqual(self.client.get("/admin").status_code, 302)
+        self.assertEqual(self.post("/login", {"email": "new@example.com", "password": "final-password-admin"}).status_code, 302)
+        self.assertEqual(self.client.get("/admin").status_code, 200)
+
+
+    def test_email_claim_does_not_hold_database_lock_during_smtp(self):
+        self.make()
+        def send_without_lock(*args):
+            with connect(self.path) as db:
+                db.execute("BEGIN IMMEDIATE")
+                self.assertEqual(db.execute("SELECT status FROM messages WHERE kind='confirmation'").fetchone()[0], "dispatching")
+        with patch("messaging._send_smtp", side_effect=send_without_lock) as sender:
+            self.assertEqual(process_messages(self.path, self._smtp_config()), 1)
+            self.assertEqual(sender.call_count, 1)
+
+    def test_interrupted_email_claim_is_not_retried(self):
+        self.make()
+        with patch("messaging._send_smtp", side_effect=SystemExit("simulated interruption")):
+            with self.assertRaises(SystemExit):
+                process_messages(self.path, self._smtp_config())
+        with patch("messaging._send_smtp", return_value=None) as sender:
+            self.assertEqual(process_messages(self.path, self._smtp_config()), 0)
+            sender.assert_not_called()
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT status FROM messages WHERE kind='confirmation'").fetchone()[0], "dispatching")
+
+    def test_cron_requires_secret_and_limits_processing(self):
+        self.app.config["CRON_SECRET"] = "x" * 40
+        with patch("app.process_messages", return_value=1) as processor:
+            self.assertEqual(self.client.get("/api/cron/messages").status_code, 401)
+            self.assertEqual(self.client.get("/api/cron/messages", headers={"Authorization": "Bearer wrong"}).status_code, 401)
+            processor.assert_not_called()
+            response = self.client.get("/api/cron/messages", headers={"Authorization": "Bearer " + "x" * 40})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json, {"processed": 1})
+            processor.assert_called_once_with(self.app.config["DATABASE"], self.app.config, limit=1)
+
+    def test_vercel_change_dispatches_transaction_email(self):
+        token = self.make()
+        self.login()
+        with patch.dict("os.environ", {"VERCEL": "1"}):
+            with patch("app.process_messages", return_value=1) as processor:
+                response = self.post("/booking/" + token + "/change", {"action": "cancel"})
+                self.assertEqual(response.status_code, 302)
+                processor.assert_called_once_with(self.app.config["DATABASE"], self.app.config, limit=1, include_reminders=False)
+
+
+    def test_concurrent_email_dispatch_sends_only_once(self):
+        self.make()
+        barrier = threading.Barrier(2)
+        def run(_):
+            barrier.wait()
+            return process_messages(self.path, self._smtp_config())
+        with patch("messaging._send_smtp", return_value=None) as sender:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                self.assertEqual(sum(pool.map(run, range(2))), 1)
+            self.assertEqual(sender.call_count, 1)
 
 
 if __name__ == "__main__":

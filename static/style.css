@@ -1735,3 +1735,13 @@ body{font-family:"Segoe UI",Arial,sans-serif;font-size:17px}h1,h2,h3,.brand{font
 .big-scissors>.icon,.auth-scissors>.icon{width:1em;height:1em;vertical-align:middle;stroke-width:1.2}
 .big-scissors{text-shadow:none;filter:drop-shadow(8px 8px 0 #d1dce8)}
 .service-icon>.icon,.info-card>span>.icon,.empty-state>span>.icon{width:1em;height:1em}
+
+/* Keep the Google mark in its brand colors on a neutral sign-in button. */
+.btn.google-signin{background:#fff;color:#3c4043;border:1px solid #747775;border-radius:6px;gap:12px;font-family:Arial,sans-serif;font-weight:600;min-height:44px}
+.btn.google-signin:hover{background:#f8faff;border-color:#4285f4;color:#202124;box-shadow:0 1px 3px #173b6318}
+.btn.google-signin:focus-visible{outline:3px solid #4285f4;outline-offset:3px}
+.btn.google-signin>.icon-google{width:20px;height:20px;stroke:none}
+.icon{overflow:visible;shape-rendering:geometricPrecision}
+.back-link,.table-link{display:inline-flex;align-items:center;gap:6px}
+.text-btn>.icon{width:17px;height:17px;margin-right:4px}
+.sidebar a>span>.icon{width:21px;height:21px}

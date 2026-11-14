@@ -108,61 +108,60 @@ def send_verification_code(path, config, email, code):
     return True
 
 
-def process_messages(path, config):
-    count = 0
-    # Lock serializes updates with cancellation/reschedule while a message is dispatched.
+def process_messages(path, config, limit=10, include_reminders=True):
+    """Claim durably before SMTP; never hold a remote write transaction during I/O.
+
+    A process interrupted after claiming leaves 'dispatching' for manual review.
+    Such messages are never automatically retried because SMTP has no idempotency key.
+    """
     with connect(path) as db:
-        db.execute("BEGIN IMMEDIATE")
         rows = db.execute(
-            "SELECT * FROM messages WHERE status='pending' AND due<=? ORDER BY due LIMIT 10",
-            (stamp(now()),),
+            "SELECT id FROM messages WHERE status='pending' AND due<=? "
+            + ("" if include_reminders else "AND kind!='reminder' ")
+            + "ORDER BY due,id LIMIT ?",
+            (stamp(now()), int(limit)),
         ).fetchall()
-        for m in rows:
-            raw = db.execute(
-                "SELECT token FROM bookings WHERE id=?", (m["booking_id"],)
-            ).fetchone()
-            b = get_booking(db, raw["token"])
-            if b["version"] != m["version"] or (
+    count = 0
+    for candidate in rows:
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            m = db.execute("SELECT * FROM messages WHERE id=? AND status='pending'", (candidate["id"],)).fetchone()
+            if not m:
+                continue
+            raw = db.execute("SELECT token FROM bookings WHERE id=?", (m["booking_id"],)).fetchone()
+            b = get_booking(db, raw["token"]) if raw else None
+            if not b or b["version"] != m["version"] or (
                 m["kind"] == "reminder"
                 and (b["status"] != "scheduled" or parse(b["start"]) <= now())
             ):
-                db.execute(
-                    "UPDATE messages SET status='obsolete' WHERE id=?", (m["id"],)
-                )
+                db.execute("UPDATE messages SET status='obsolete' WHERE id=?", (m["id"],))
                 continue
-            link = (
-                str(config.get("PUBLIC_BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
-                + "/booking/"
-                + b["token"]
-            )
+            link = str(config.get("PUBLIC_BASE_URL", "http://127.0.0.1:5000")).rstrip("/") + "/booking/" + b["token"]
             subject, body, preview = _build(b, m["kind"], link)
-            status = "simulated"
-            error = ""
-            pid = None
-            mode = str(config.get("MAIL_MODE", "demo") or "demo").lower()
-            if mode == "smtp":
-                if not _smtp_ready(config):
-                    status = "failed"
-                    error = "Konfigurasi SMTP belum lengkap."
-                else:
-                    try:
-                        pid = _send_smtp(config, b["email"], subject, body)
-                        status = "accepted"
-                    except smtplib.SMTPAuthenticationError:
-                        status = "failed"
-                        error = "Autentikasi SMTP gagal. Periksa email dan App Password."
-                    except smtplib.SMTPRecipientsRefused:
-                        status = "failed"
-                        error = "Alamat email penerima ditolak oleh server."
-                    except (smtplib.SMTPException, socket.timeout, TimeoutError, OSError):
-                        status = "unknown"
-                        error = "Status pengiriman email tidak pasti. Periksa penyedia; tidak dicoba ulang otomatis."
-                    except Exception:
-                        status = "unknown"
-                        error = "Status pengiriman email tidak pasti. Periksa penyedia; tidak dicoba ulang otomatis."
             db.execute(
-                "UPDATE messages SET status=?,preview=?,error=?,provider_id=?,processed_at=? WHERE id=?",
-                (status, preview, error, pid, stamp(now()), m["id"]),
+                "UPDATE messages SET status='dispatching',preview=?,processed_at=? WHERE id=?",
+                (preview, stamp(now()), m["id"]),
             )
-            count += 1
+        # The committed claim prevents concurrent invocations from sending twice.
+        status, error, pid = "simulated", "", None
+        mode = str(config.get("MAIL_MODE", "demo") or "demo").lower()
+        if mode == "smtp":
+            if not _smtp_ready(config):
+                status, error = "failed", "Konfigurasi SMTP belum lengkap."
+            else:
+                try:
+                    pid = _send_smtp(config, b["email"], subject, body)
+                    status = "accepted"
+                except smtplib.SMTPAuthenticationError:
+                    status, error = "failed", "Autentikasi SMTP gagal. Periksa email dan App Password."
+                except smtplib.SMTPRecipientsRefused:
+                    status, error = "failed", "Alamat email penerima ditolak oleh server."
+                except Exception:
+                    status, error = "unknown", "Status pengiriman email tidak pasti. Periksa penyedia; tidak dicoba ulang otomatis."
+        with connect(path) as db:
+            db.execute(
+                "UPDATE messages SET status=?,error=?,provider_id=?,processed_at=? WHERE id=? AND status='dispatching'",
+                (status, error, pid, stamp(now()), m["id"]),
+            )
+        count += 1
     return count

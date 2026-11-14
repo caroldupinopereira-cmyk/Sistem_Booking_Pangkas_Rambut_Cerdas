@@ -5,7 +5,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <title>{% block title %}{{ shop.shop_name }}{% endblock %} · Booking Pangkas</title>
-        <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static',filename='style.css',v=asset_version) }}">
         <script src="{{ url_for('static',filename='app.js') }}" defer></script>
     </head>
     <body class="{% if request.path.startswith('/admin') %}admin-body{% endif %}">
@@ -28,16 +28,16 @@
                     <a href="{{ url_for('masuk') }}">Masuk / Daftar</a>
                 {% endif %}
                 {% if is_admin %}
-                    <a class="nav-pill" href="{{ url_for('dashboard') }}">Dashboard admin {{ icon("arrow-right") }}</a>
+                    <a class="nav-pill" href="{{ url_for('dashboard') }}">Dashboard admin {{ icon("dashboard") }}</a>
                     <form action="{{ url_for('logout') }}" method="post">
-                        {{ csrf_field() }}<button class="text-btn" type="submit">Keluar admin</button>
+                        {{ csrf_field() }}<button class="text-btn" type="submit">{{ icon("logout") }} Keluar admin</button>
                     </form>
                 {% elif is_customer %}
                     <form action="{{ url_for('keluar') }}" method="post">
-                        {{ csrf_field() }}<button class="text-btn" type="submit">Keluar</button>
+                        {{ csrf_field() }}<button class="text-btn" type="submit">{{ icon("logout") }} Keluar</button>
                     </form>
                 {% else %}
-                    <a class="nav-pill" href="{{ url_for('login') }}">Masuk admin {{ icon("arrow-right") }}</a>
+                    <a class="nav-pill" href="{{ url_for('login') }}">Masuk admin {{ icon("login") }}</a>
                 {% endif %}
             </nav>
         </header>
@@ -51,8 +51,8 @@
                             <span>{{ icon(icon_name) }}</span>{{ label }}</a>
                     {% endfor %}
                     <div class="sidebar-note">
-                        <span class="status-dot"></span> Lokal · WIB
-                        <p>Data tersimpan di laptop ini.</p>
+                        <span class="status-dot"></span> {{ 'Online' if database_online else 'Lokal' }} · WIB
+                        <p>{{ 'Data tersimpan di Turso.' if database_online else 'Data tersimpan di laptop ini.' }}</p>
                         <small>Email: {{ 'simulasi' if mail_mode=='demo' else 'SMTP' }}</small>
                     </div>
                 </aside>

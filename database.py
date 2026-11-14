@@ -1,5 +1,7 @@
 import sqlite3
+import time
 from pathlib import Path
+from dataclasses import dataclass, field
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -52,7 +54,132 @@ class Connection(sqlite3.Connection):
             self.close()
 
 
+@dataclass(frozen=True)
+class TursoDatabase:
+    url: str
+    auth_token: str = field(repr=False)
+
+
+class ResultRow:
+    """SQLite-style named and positional access for the libSQL driver."""
+    def __init__(self, columns, values):
+        self._columns = columns
+        self._values = tuple(values)
+
+    def __getitem__(self, key):
+        return self._values[self._columns.index(key)] if isinstance(key, str) else self._values[key]
+
+    def keys(self):
+        return list(self._columns)
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+
+class RemoteCursor:
+    def __init__(self, cursor):
+        # libSQL derives lastrowid from the connection: snapshot it before any
+        # subsequent INSERT (for example history) changes the connection value.
+        self.lastrowid = cursor.lastrowid
+        self.rowcount = cursor.rowcount
+        columns = [column[0] for column in (cursor.description or ())]
+        self._rows = iter(ResultRow(columns, row) for row in (cursor.fetchall() or []))
+
+    def fetchone(self):
+        return next(self._rows, None)
+
+    def fetchall(self):
+        return list(self._rows)
+
+    def __iter__(self):
+        return self._rows
+
+
+class RemoteConnection:
+    def __init__(self, connection):
+        self._connection = connection
+
+    def execute(self, sql, parameters=()):
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                return RemoteCursor(self._connection.execute(sql, parameters))
+            except ValueError as error:
+                message = str(error).lower()
+                # Retry only a rejected lock acquisition, never an INSERT or an
+                # uncertain network result. Native busy waiting may retain the GIL.
+                if ("locked" in message or "sqlite_busy" in message) and sql.strip().upper() == "BEGIN IMMEDIATE" and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                    continue
+                if any(word in message for word in ("constraint", "satu akun admin", "foreign key")):
+                    raise sqlite3.IntegrityError("Operasi ditolak oleh aturan integritas database.") from None
+                raise sqlite3.DatabaseError("Operasi database Turso gagal.") from None
+
+    def executemany(self, sql, rows):
+        for row in rows:
+            self.execute(sql, row)
+
+    def executescript(self, script):
+        # complete_statement preserves trigger bodies with internal semicolons.
+        statement = ""
+        for char in script:
+            statement += char
+            if char == ";" and sqlite3.complete_statement(statement):
+                self.execute(statement)
+                statement = ""
+        if statement.strip():
+            self.execute(statement)
+
+    def commit(self):
+        self._connection.commit()
+
+    def rollback(self):
+        self._connection.rollback()
+
+    def close(self):
+        self._connection.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            if exc_type is None:
+                try:
+                    self.commit()
+                except Exception:
+                    self.rollback()
+                    raise
+            else:
+                self.rollback()
+        finally:
+            self.close()
+
+
+def _open_remote(target):
+    if not target.auth_token.strip():
+        raise RuntimeError("Isi TURSO_AUTH_TOKEN di konfigurasi pribadi.")
+    if not target.url.startswith("libsql://") or not target.url.endswith(".turso.io"):
+        raise RuntimeError("TURSO_DATABASE_URL harus berupa libsql://...turso.io.")
+    try:
+        import libsql
+    except ImportError:
+        raise RuntimeError("Driver Turso belum terpasang. Jalankan pip install -r requirements.txt.") from None
+    db = RemoteConnection(libsql.connect(database=target.url, auth_token=target.auth_token, timeout=0))
+    try:
+        db.execute("PRAGMA foreign_keys=ON")
+    except Exception:
+        db.close()
+        raise
+    return db
+
+
 def connect(path):
+    if isinstance(path, TursoDatabase):
+        return _open_remote(path)
     db = sqlite3.connect(str(path), timeout=15, factory=Connection)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys=ON")
@@ -65,7 +192,8 @@ def _columns(db, table):
 
 
 def init_db(path):
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    if not isinstance(path, TursoDatabase):
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
     with connect(path) as db:
         if db.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='bookings'"
@@ -96,6 +224,15 @@ def init_db(path):
             ).fetchone():
                 db.execute(f"DROP TABLE {old}")
         db.executescript(SCHEMA)
+        if db.execute("SELECT COUNT(*) FROM admins").fetchone()[0] > 1:
+            raise RuntimeError("Database memiliki lebih dari satu admin. Tinjau akun sebelum melanjutkan; tidak ada akun yang dihapus otomatis.")
+        db.executescript("""
+        CREATE TRIGGER IF NOT EXISTS admins_single_account
+        BEFORE INSERT ON admins WHEN (SELECT COUNT(*) FROM admins) >= 1
+        BEGIN
+            SELECT RAISE(ABORT, 'Hanya satu akun admin diperbolehkan');
+        END;
+        """)
         if db.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='bookings'"
         ).fetchone():
@@ -103,6 +240,7 @@ def init_db(path):
             if "customer_id" not in cols:
                 db.execute("ALTER TABLE bookings ADD COLUMN customer_id INTEGER REFERENCES customers(id)")
         db.execute("CREATE INDEX IF NOT EXISTS booking_customer ON bookings(customer_id,start)")
+        db.execute("BEGIN IMMEDIATE")
         defaults = {
             "shop_name": "Ruang Pangkas",
             "address": "Alamat belum diatur",

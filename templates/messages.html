@@ -39,7 +39,7 @@
                                     {{ {'confirmation':'Konfirmasi','reschedule':'Ubah jadwal','cancellation':'Pembatalan','reminder':'Pengingat','verification':'Kode verifikasi'}.get(m.kind, m.kind) }}<small>{{ m.due|when }}</small>
                                 </td>
                                 <td>
-                                    <span class="badge {{ m.status }}">{{ {'pending':'Terjadwal','simulated':'Simulasi','obsolete':'Dihentikan','accepted':'Diterima penyedia','failed':'Gagal','unknown':'Perlu diperiksa'}.get(m.status,m.status) }}</span>
+                                    <span class="badge {{ m.status }}">{{ {'pending':'Terjadwal','dispatching':'Diproses / perlu diperiksa','simulated':'Simulasi','obsolete':'Dihentikan','accepted':'Diterima penyedia','failed':'Gagal','unknown':'Perlu diperiksa'}.get(m.status,m.status) }}</span>
                                 </td>
                                 <td>
                                     {% if m.preview %}
@@ -67,5 +67,5 @@
             </div>
         {% endif %}
     </section>
-    <p class="help">Saat dijalankan melalui app.py, worker memeriksa pesan setiap 15 detik selama aplikasi hidup. Pesan kedaluwarsa tidak dikirim ulang otomatis.</p>
+    <p class="help">Saat lokal, worker memeriksa setiap 15 detik. Di Vercel, email transaksi diproses saat perubahan disimpan; pengingat memerlukan scheduler. Status diproses yang menetap perlu diperiksa dan tidak dikirim ulang otomatis.</p>
 {% endblock %}

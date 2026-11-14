@@ -115,3 +115,24 @@ Tes memakai database sementara dan waktu terkontrol; tidak membuat pelanggan ata
 ## Penyimpanan database lokal
 
 Folder proyek berada dalam jalur OneDrive. Jalankan satu salinan database pada satu komputer; jangan membuka database yang sama di dua mesin melalui sinkronisasi. Untuk salinan cadangan, hentikan server sebelum menyalin folder `instance`. Jangan membagikan `.env`, `secret.key`, atau database pelanggan.
+
+## Persiapan hosting
+
+Lihat [DEPLOYMENT.md](DEPLOYMENT.md). Konfigurasi Vercel, Turso, dan email transaksi tersedia. Pengingat terjadwal membutuhkan scheduler terpisah. Jalankan `python prepare_vercel_env.py` untuk menyiapkan file konfigurasi pribadi.
+
+## Satu akun admin dan penggantian akun
+
+Database membatasi tepat maksimal satu akun admin. /setup hanya membuat akun
+pertama; setelah ada akun, halaman tersebut mengarah ke login.
+Untuk mengganti akun, isi `ADMIN_CHANGE_CODE` dalam .env dengan kode acak minimal
+32 karakter. Buat sendiri secara pribadi menggunakan
+`python -c "import secrets; print(secrets.token_hex(32))"`.
+Kode ini berbeda dari password admin, sandi Gmail, dan Client Secret Google.
+
+Jalankan `python admin_account.py` dari terminal server yang menyimpan database.
+Masukkan kode khusus, email baru, dan password baru dua kali. Kode serta password
+tidak ditampilkan saat diketik. Akun lama diperbarui, bukan menambah akun kedua.
+Sesi lama dibatalkan pada request berikutnya, termasuk jika email tidak berubah.
+Jika kode hilang, pemilik akses konfigurasi server dapat menggantinya di .env.
+Tidak ada endpoint publik untuk mengganti admin. Integrasi database online untuk
+Vercel masih harus diselesaikan sebelum perintah ini bisa mengubah database hosting.
