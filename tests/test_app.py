@@ -585,5 +585,15 @@ class BookingTests(unittest.TestCase):
                     self.assertEqual([slot["value"] for slot in actual],expected)
 
 
+    def test_vercel_boot_does_not_reinitialize_remote_schema(self):
+        from database import TursoDatabase
+        with patch.dict("os.environ", {"VERCEL": "1", "SECRET_KEY": "test-hosting-secret"}):
+            with patch("app.init_db") as initialize:
+                with patch("app.connect", side_effect=lambda target: connect(self.path)):
+                    hosted = create_app({"TESTING": True, "DATABASE": TursoDatabase("libsql://example.turso.io", "test-token")})
+        initialize.assert_not_called()
+        self.assertTrue(hosted.config["TESTING"])
+
+
 if __name__ == "__main__":
     unittest.main()

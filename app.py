@@ -131,12 +131,19 @@ def create_app(test_config=None):
             app.config["DATABASE"] = TursoDatabase(turso_url, str(app.config.get("TURSO_AUTH_TOKEN", "")).strip())
     if os.environ.get("VERCEL") == "1" and not isinstance(app.config["DATABASE"], TursoDatabase):
         raise RuntimeError("SQLite lokal tidak bisa dipakai di Vercel. Isi TURSO_DATABASE_URL dan TURSO_AUTH_TOKEN.")
-    init_db(app.config["DATABASE"])
-    with connect(app.config["DATABASE"]) as db:
-        db.execute(
-            "INSERT OR IGNORE INTO settings VALUES (?,?)",
-            ("tracking_started", stamp(now())),
-        )
+    if os.environ.get("VERCEL") == "1":
+        # Provision/migrate through the local admin tools before deployment.
+        # Replaying schema DDL and seed writes on every cold start costs dozens
+        # of network round trips and contends with live booking transactions.
+        with connect(app.config["DATABASE"]) as db:
+            db.execute("SELECT value FROM settings WHERE key='tracking_started'").fetchone()
+    else:
+        init_db(app.config["DATABASE"])
+        with connect(app.config["DATABASE"]) as db:
+            db.execute(
+                "INSERT OR IGNORE INTO settings VALUES (?,?)",
+                ("tracking_started", stamp(now())),
+            )
 
     def db():
         return connect(app.config["DATABASE"])

@@ -113,3 +113,10 @@ Pengujian pengingat otomatis tetap ditunda sesuai keputusan pengguna.
 
 - https://vercel.com/docs/frameworks/backend/flask
 - https://vercel.com/kb/guide/is-sqlite-supported-in-vercel
+
+## Kinerja daftar jam dan startup
+
+Daftar slot mengambil interval sibuk dengan lima query per tanggal/kapster.
+Di Vercel, startup hanya memeriksa tabel yang sudah tersedia; pembuatan tabel dan
+migrasi dijalankan terlebih dahulu melalui aplikasi lokal dengan konfigurasi Turso.
+Jangan deploy ke database kosong sebelum inisialisasi lokal selesai.
