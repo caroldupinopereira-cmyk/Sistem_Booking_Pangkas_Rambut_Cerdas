@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 <form class="slot-form"
       method="post"
       action="{{ url_for('walkin') if walkin_mode else url_for('book') }}">
@@ -14,7 +15,7 @@
                            name="service_id"
                            value="{{ s.id }}"
                            {% if loop.first %}checked{% endif %}>
-                    <span class="service-icon">{{ '✂' if loop.index==1 else '◈' }}</span>
+                    <span class="service-icon">{{ icon("droplet" if "keramas" in s.name|lower else "scissors") }}</span>
                     <strong>{{ s.name }}</strong>
                     <span class="muted">{{ s.duration }} menit</span>
                     <b>{{ s.price|rupiah }}</b>
@@ -86,7 +87,7 @@
             {% endif %}
         </div>
         <button class="btn primary wide booking-submit" type="submit" disabled>
-            {{ 'Tambahkan ke jadwal' if walkin_mode else 'Konfirmasi booking' }} <span>↗</span>
+            {{ 'Tambahkan ke jadwal' if walkin_mode else 'Konfirmasi booking' }} <span>{{ icon("arrow-right") }}</span>
         </button>
     </div>
 </form>

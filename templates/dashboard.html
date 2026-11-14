@@ -7,7 +7,7 @@
             <h1>Hari yang tertata.</h1>
             <p class="muted">Kelola jadwal, sambut pelanggan, catat setiap kunjungan.</p>
         </div>
-        <a class="btn primary" href="{{ url_for('walkin') }}">＋ Pelanggan langsung</a>
+        <a class="btn primary" href="{{ url_for('walkin') }}">{{ icon("plus") }} Pelanggan langsung</a>
     </div>
     <div class="stats">
         <div class="stat">
@@ -76,7 +76,7 @@
                                 </td>
                                 <td>
                                     <a class="table-link"
-                                       href="{{ url_for('booking_detail',token=b.token) }}">Kelola ↗</a>
+                                       href="{{ url_for('booking_detail',token=b.token) }}">Kelola {{ icon("arrow-right") }}</a>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -85,11 +85,11 @@
             </div>
         {% else %}
             <div class="empty-state">
-                <span>▦</span>
+                <span>{{ icon("calendar") }}</span>
                 <h3>Jadwal masih lapang.</h3>
                 <p>Belum ada kunjungan pada tanggal ini. Booking pelanggan dan walk-in akan muncul di sini.</p>
                 <a href="{{ url_for('home') }}#booking"
-                   class="btn outline">Buka halaman booking ↗</a>
+                   class="btn outline">Buka halaman booking {{ icon("arrow-right") }}</a>
             </div>
         {% endif %}
     </section>

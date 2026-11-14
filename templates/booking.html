@@ -9,14 +9,14 @@
             <em>{{ b.name }}.</em>
         </h1>
         <p>Simpan tautan halaman ini. Tautan bersifat pribadi dan dapat digunakan untuk mengelola booking.</p>
-        <button class="btn outline" type="button" data-copy-link>Salin tautan booking ↗</button>
-        {% if owner %}<a class="btn outline" href="{{ url_for('dasbor') }}">Kembali ke dasbor ↗</a>{% endif %}
+        <button class="btn outline" type="button" data-copy-link>Salin tautan booking {{ icon("copy") }}</button>
+        {% if owner %}<a class="btn outline" href="{{ url_for('dasbor') }}">Kembali ke dasbor {{ icon("arrow-right") }}</a>{% endif %}
         <span class="copy-result" role="status"></span>
     </section>
     <div class="detail-grid">
         <section class="panel booking-ticket">
             <div class="ticket-head">
-                <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" focusable="false"><circle cx="9" cy="23" r="4"/><circle cx="23" cy="23" r="4"/><path d="M12 20 25 7m-5 13L7 7m6 13 3-3m-1-1 4 4"/></svg></span>
+                <span class="brand-mark" aria-hidden="true">{{ icon("scissors") }}</span>
                 <span class="badge {{ b.status }}">{{ status_labels[b.status] }}</span>
             </div>
             <span class="eyebrow">{{ b.code }}</span>
@@ -79,7 +79,7 @@
                         Tanggal baru<input type="date" name="date" min="{{ today }}" value="{{ b.start[:10] }}" required>
                     </label>
                     <div class="slot-list" aria-live="polite"></div>
-                    <button class="btn primary wide booking-submit" disabled>Simpan jadwal baru ↗</button>
+                    <button class="btn primary wide booking-submit" disabled>Simpan jadwal baru {{ icon("calendar") }}</button>
                 </form>
                 <hr>
                 <form method="post" action="{{ url_for('change',token=b.token) }}"
@@ -97,7 +97,7 @@
             {% if shop.admin_email %}
                 <a class="btn outline wide"
                    href="mailto:{{ shop.admin_email }}"
-                   rel="noreferrer">Hubungi admin ↗</a>
+                   rel="noreferrer">Hubungi admin {{ icon("mail") }}</a>
             {% else %}
                 <p class="help">Email admin belum diatur. Hubungi tempat cukur secara langsung.</p>
             {% endif %}

@@ -12,9 +12,9 @@
             </h1>
             <p>Pilih layanan, temukan jam yang pas, lalu datang sesuai jadwal. Masuk atau daftar untuk mengelola booking di dasbor pribadi Anda.</p>
             {% if is_customer %}
-                <a class="btn primary" href="{{ url_for('dasbor') }}">Buka dasbor booking <span>↗</span></a>
+                <a class="btn primary" href="{{ url_for('dasbor') }}">Buka dasbor booking <span>{{ icon("arrow-right") }}</span></a>
             {% else %}
-                <a class="btn primary" href="{{ url_for('masuk') }}">Masuk atau daftar untuk booking <span>↗</span></a>
+                <a class="btn primary" href="{{ url_for('masuk') }}">Masuk atau daftar untuk booking <span>{{ icon("arrow-right") }}</span></a>
             {% endif %}
             <div class="hero-facts">
                 <span><b>01</b> Masuk akun</span>
@@ -28,19 +28,19 @@
             <span class="art-label">A LITTLE TIME
                 <br>
             FOR YOURSELF.</span>
-            <span class="big-scissors">✂</span>
+            <span class="big-scissors">{{ icon("scissors") }}</span>
             <div class="art-ticket">
                 <span>NEXT UP</span>
                 <strong>Your fresh start.</strong>
                 <small>Good hair. Better plans.</small>
-                <i>✦</i>
+                <i>{{ icon("sparkles") }}</i>
             </div>
             <span class="art-bottom">{{ shop.shop_name }} / EVERYDAY GROOMING</span>
         </div>
     </section>
     {% if shop.sample_settings=="1" %}
         <div class="notice">
-            <b>Konfigurasi contoh.</b> Nama kapster, harga, durasi, dan jam kerja perlu disesuaikan admin. Belum ada data pelanggan buatan.{% if not has_admin %} <a href="{{ url_for('setup') }}">Buat akun admin →</a>
+            <b>Konfigurasi contoh.</b> Nama kapster, harga, durasi, dan jam kerja perlu disesuaikan admin. Belum ada data pelanggan buatan.{% if not has_admin %} <a href="{{ url_for('setup') }}">Buat akun admin {{ icon("arrow-right") }}</a>
     {% endif %}
     </div>
 {% endif %}
@@ -61,12 +61,12 @@
         <span class="eyebrow">LAYANAN & INFORMASI</span>
         <h2>Satu jadwal.<br>Satu langkah<br>lebih siap.</h2>
         <p>Booking dilakukan lewat dasbor pelanggan agar jadwal, email konfirmasi, dan riwayat tersimpan rapi di akun Anda.</p>
-        <div class="info-card"><span>✉</span><div><b>Pengingat sebelum datang</b><p>2 jam sebelum jadwal, untuk booking yang memenuhi ketentuan.</p></div></div>
-        <div class="info-card"><span>↻</span><div><b>Rencana bisa berubah</b><p>Ubah atau batalkan paling lambat 1 jam sebelumnya.</p></div></div>
+        <div class="info-card"><span>{{ icon("mail") }}</span><div><b>Pengingat sebelum datang</b><p>2 jam sebelum jadwal, untuk booking yang memenuhi ketentuan.</p></div></div>
+        <div class="info-card"><span>{{ icon("refresh") }}</span><div><b>Rencana bisa berubah</b><p>Ubah atau batalkan paling lambat 1 jam sebelumnya.</p></div></div>
         <div class="location">
             <span class="eyebrow">TEMUKAN KAMI</span>
             <p>{{ shop.address }}</p>
-            {% if shop.admin_email %}<a href="mailto:{{ shop.admin_email }}" rel="noreferrer">Hubungi admin ↗</a>{% endif %}
+            {% if shop.admin_email %}<a href="mailto:{{ shop.admin_email }}" rel="noreferrer">Hubungi admin {{ icon("mail") }}</a>{% endif %}
         </div>
     </aside>
     <div class="booking-panel">
@@ -74,7 +74,7 @@
         <h2>Harga & kapster</h2>
         <div class="service-options" style="margin-bottom:18px">
             {% for s in services %}
-                <div class="service-option" style="cursor:default"><span class="service-icon">✂</span><strong>{{ s.name }}</strong><span class="muted">{{ s.duration }} menit</span><b>{{ s.price|rupiah }}</b></div>
+                <div class="service-option" style="cursor:default"><span class="service-icon">{{ icon("droplet" if "keramas" in s.name|lower else "scissors") }}</span><strong>{{ s.name }}</strong><span class="muted">{{ s.duration }} menit</span><b>{{ s.price|rupiah }}</b></div>
             {% else %}
                 <p>Belum ada layanan aktif.</p>
             {% endfor %}
@@ -82,9 +82,9 @@
         <p><b>Kapster:</b> {{ barbers|map(attribute='name')|join(', ') if barbers else 'Belum tersedia' }}</p>
         <div class="booking-policy"><b>Mulai booking</b><p>Masuk atau daftar untuk memilih slot, menerima konfirmasi email, dan mengelola jadwal di dasbor.</p></div>
         {% if is_customer %}
-            <a class="btn primary wide" href="{{ url_for('dasbor') }}">Buka dasbor untuk booking <span>↗</span></a>
+            <a class="btn primary wide" href="{{ url_for('dasbor') }}">Buka dasbor untuk booking <span>{{ icon("arrow-right") }}</span></a>
         {% else %}
-            <a class="btn primary wide" href="{{ url_for('masuk') }}">Masuk atau daftar untuk booking <span>↗</span></a>
+            <a class="btn primary wide" href="{{ url_for('masuk') }}">Masuk atau daftar untuk booking <span>{{ icon("arrow-right") }}</span></a>
         {% endif %}
     </div>
 </section>

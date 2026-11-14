@@ -77,7 +77,7 @@
             </form>
         {% endfor %}
         <details>
-            <summary>＋ Tambah layanan</summary>
+            <summary>{{ icon("plus") }} Tambah layanan</summary>
             <form method="post" class="settings-row">
                 {{ csrf_field() }}<input type="hidden" name="action" value="service">
                 <label>

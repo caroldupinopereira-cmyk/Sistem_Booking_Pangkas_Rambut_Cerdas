@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
     <section class="empty-state panel">
-        <span>↗</span>
+        <span>{{ icon("alert") }}</span>
         <h1>{{ title }}</h1>
         <p>{{ message }}</p>
         <a class="btn primary" href="{{ url_for('home') }}">Kembali ke beranda</a>

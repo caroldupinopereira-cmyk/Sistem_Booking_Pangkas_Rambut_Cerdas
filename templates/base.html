@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 <!DOCTYPE html>
 <html lang="id">
     <head>
@@ -14,7 +15,7 @@
         {% endmacro %}
         <header class="topbar">
             <a class="brand" href="{{ url_for('home') }}">
-                <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" focusable="false"><circle cx="9" cy="23" r="4"/><circle cx="23" cy="23" r="4"/><path d="M12 20 25 7m-5 13L7 7m6 13 3-3m-1-1 4 4"/></svg></span>
+                <span class="brand-mark" aria-hidden="true">{{ icon("scissors") }}</span>
                 <span>{{ shop.shop_name }}<small>BOOKING & GROOMING</small>
                 </span>
             </a>
@@ -27,7 +28,7 @@
                     <a href="{{ url_for('masuk') }}">Masuk / Daftar</a>
                 {% endif %}
                 {% if is_admin %}
-                    <a class="nav-pill" href="{{ url_for('dashboard') }}">Dashboard admin ↗</a>
+                    <a class="nav-pill" href="{{ url_for('dashboard') }}">Dashboard admin {{ icon("arrow-right") }}</a>
                     <form action="{{ url_for('logout') }}" method="post">
                         {{ csrf_field() }}<button class="text-btn" type="submit">Keluar admin</button>
                     </form>
@@ -36,7 +37,7 @@
                         {{ csrf_field() }}<button class="text-btn" type="submit">Keluar</button>
                     </form>
                 {% else %}
-                    <a class="nav-pill" href="{{ url_for('login') }}">Masuk admin ↗</a>
+                    <a class="nav-pill" href="{{ url_for('login') }}">Masuk admin {{ icon("arrow-right") }}</a>
                 {% endif %}
             </nav>
         </header>
@@ -44,10 +45,10 @@
             <div class="admin-layout">
                 <aside class="sidebar">
                     <span class="eyebrow">RUANG KERJA</span>
-                    {% for endpoint,label,icon in [('dashboard','Jadwal pelanggan','▦'),('walkin','Tambah walk-in','＋'),('analytics','Analisis & promo','↗'),('messages','Pesan Email','✉'),('admin_settings','Pengaturan','⚙')] %}
+                    {% for endpoint,label,icon_name in [('dashboard','Jadwal pelanggan','calendar'),('walkin','Tambah walk-in','plus'),('analytics','Analisis & promo','chart'),('messages','Pesan Email','mail'),('admin_settings','Pengaturan','settings')] %}
                         <a class="{% if request.endpoint==endpoint %}active{% endif %}"
                            href="{{ url_for(endpoint) }}">
-                            <span>{{ icon }}</span>{{ label }}</a>
+                            <span>{{ icon(icon_name) }}</span>{{ label }}</a>
                     {% endfor %}
                     <div class="sidebar-note">
                         <span class="status-dot"></span> Lokal · WIB

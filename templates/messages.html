@@ -8,7 +8,7 @@
             <p class="muted">Konfirmasi, perubahan, pembatalan, dan pengingat dalam satu riwayat.</p>
         </div>
         <form method="post">
-            {{ csrf_field() }}<button class="btn primary">Proses pesan jatuh tempo ↗</button>
+            {{ csrf_field() }}<button class="btn primary">Proses pesan jatuh tempo {{ icon("mail") }}</button>
         </form>
     </div>
     <div class="notice">
@@ -61,7 +61,7 @@
             </div>
         {% else %}
             <div class="empty-state">
-                <span>✉</span>
+                <span>{{ icon("mail") }}</span>
                 <h3>Belum ada pesan.</h3>
                 <p>Antrean dibuat setelah booking dengan email dan persetujuan pemberitahuan.</p>
             </div>

@@ -1727,3 +1727,11 @@ a:hover{color:var(--red)}em{color:#315f8f}.hero-art,.auth-art{background:#e8eef5
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:17px}h1,h2,h3,.brand{font-family:"Franklin Gothic Medium",Bahnschrift,Arial,sans-serif;font-weight:700;letter-spacing:-.025em}.brand small{font-family:"Segoe UI",Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:.18em}.topbar nav{font-size:15px}.eyebrow{font-size:12px}label,.service-option{font-size:14px}.help,small{font-size:13px}.btn{font-size:15px}.service-option .muted{font-size:13px}.service-option b,.slot{font-size:14px}
 @media(min-width:1400px){body{font-size:18px}.topbar{height:106px}.topbar nav{font-size:16px}.brand{font-size:25px}.brand small{font-size:11px}.site-main{max-width:1640px;padding:0 52px}.hero{gap:90px;padding:82px 0 76px}.hero h1{font-size:80px}.hero p,.booking-intro>p{font-size:18px}.hero-art{height:460px}.big-scissors{font-size:245px}.booking-layout{gap:90px;padding:82px 0 96px}.booking-intro h2{font-size:48px}.booking-panel,.panel{padding:34px}.eyebrow{font-size:13px}.help,small{font-size:15px}.btn{font-size:16px}.service-option{font-size:15px}.service-option .muted{font-size:14px}.service-option b,.slot{font-size:15px}.form-grid label{font-size:15px}.booking-panel input,.booking-panel select{font-size:16px}.admin-main{padding:42px 54px}}
 @media(min-width:1700px){.site-main{max-width:1740px;padding:0 64px}.hero{gap:110px}.hero-art{height:490px}.booking-layout{gap:110px}}
+
+/* Shared local SVG icons: scale with surrounding text, no external font needed. */
+.icon{display:inline-block;width:1.2em;height:1.2em;vertical-align:-.2em;flex-shrink:0;pointer-events:none}
+.btn>.icon,.nav-pill>.icon,.back-link>.icon,.table-link>.icon{width:1.15em;height:1.15em}
+.sidebar a>span{display:inline-flex;align-items:center;justify-content:center}
+.big-scissors>.icon,.auth-scissors>.icon{width:1em;height:1em;vertical-align:middle;stroke-width:1.2}
+.big-scissors{text-shadow:none;filter:drop-shadow(8px 8px 0 #d1dce8)}
+.service-icon>.icon,.info-card>span>.icon,.empty-state>span>.icon{width:1em;height:1em}

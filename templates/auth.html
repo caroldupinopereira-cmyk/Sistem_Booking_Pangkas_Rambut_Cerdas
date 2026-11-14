@@ -16,7 +16,7 @@
                 <br>
                 Rapi dalam satu tempat.
             </p>
-            <span class="auth-scissors">✂</span>
+            <span class="auth-scissors">{{ icon("scissors") }}</span>
         </div>
         <div class="auth-form">
             <span class="eyebrow">ADMIN / KAPSTER</span>
@@ -40,9 +40,9 @@
                 {% if setup %}
                     <p class="help">Minimal 10 karakter. Simpan password untuk login berikutnya.</p>
                 {% endif %}
-                <button class="btn primary wide">{{ 'Buat akun admin' if setup else 'Masuk dashboard' }} ↗</button>
+                <button class="btn primary wide">{{ 'Buat akun admin' if setup else 'Masuk dashboard' }} {{ icon("arrow-right") }}</button>
             </form>
-            <a class="back-link" href="{{ url_for('home') }}">← Kembali ke halaman pelanggan</a>
+            <a class="back-link" href="{{ url_for('home') }}">{{ icon("arrow-left") }} Kembali ke halaman pelanggan</a>
         </div>
     </section>
 {% endblock %}

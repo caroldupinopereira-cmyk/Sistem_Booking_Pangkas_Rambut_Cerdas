@@ -7,7 +7,7 @@
         <h1>Halo, {{ cust.name }}.</h1>
         <p class="muted">Kelola booking, jadwal, dan profil Anda di satu tempat.</p>
     </div>
-    <a class="btn primary" href="#buat-booking">＋ Buat booking baru</a>
+    <a class="btn primary" href="#buat-booking">{{ icon("plus") }} Buat booking baru</a>
 </div>
 
 {% if not cust.email_verified %}
@@ -24,7 +24,7 @@
         <p><b>{{ next_booking.service_name }}</b> bersama {{ next_booking.barber_name }}</p>
         <p>{{ next_booking.start|when }} WIB · <span class="badge {{ next_booking.status }}">{{ status_labels[next_booking.status] }}</span></p>
         <p class="muted">Sisa waktu: {{ remaining }}</p>
-        <a class="btn outline" href="{{ url_for('booking_detail', token=next_booking.token) }}">Lihat detail ↗</a>
+        <a class="btn outline" href="{{ url_for('booking_detail', token=next_booking.token) }}">Lihat detail {{ icon("arrow-right") }}</a>
     {% else %}
         <p class="muted">Belum ada booking terdekat. Buat booking baru di bawah.</p>
     {% endif %}
@@ -42,7 +42,7 @@
                 {% for s in services %}
                 <label class="service-option">
                     <input type="radio" name="service_id" value="{{ s.id }}" {% if loop.first %}checked{% endif %}>
-                    <span class="service-icon">✂</span><strong>{{ s.name }}</strong><span class="muted">{{ s.duration }} menit</span><b>{{ s.price|rupiah }}</b>
+                    <span class="service-icon">{{ icon("droplet" if "keramas" in s.name|lower else "scissors") }}</span><strong>{{ s.name }}</strong><span class="muted">{{ s.duration }} menit</span><b>{{ s.price|rupiah }}</b>
                 </label>
                 {% else %}<p>Belum ada layanan aktif.</p>{% endfor %}
             </div>
@@ -60,7 +60,7 @@
         <div class="form-section">
             <h3><span class="step">03</span> Konfirmasi</h3>
             <div class="booking-policy"><b>Kebijakan booking</b><p>Ubah atau batal paling lambat 1 jam sebelum jadwal. Pembayaran dilakukan di tempat.</p></div>
-            <button class="btn primary wide booking-submit" type="submit" disabled>Konfirmasi booking <span>↗</span></button>
+            <button class="btn primary wide booking-submit" type="submit" disabled>Konfirmasi booking <span>{{ icon("arrow-right") }}</span></button>
         </div>
     </form>
     {% else %}
@@ -78,7 +78,7 @@
             <td><b>{{ b.start|when }}</b><small>{{ b.code }}</small></td>
             <td>{{ b.service_name }}<small>{{ b.barber_name }}</small></td>
             <td><span class="badge {{ b.status }}">{{ status_labels[b.status] }}</span></td>
-            <td><a class="table-link" href="{{ url_for('booking_detail', token=b.token) }}">Kelola ↗</a></td>
+            <td><a class="table-link" href="{{ url_for('booking_detail', token=b.token) }}">Kelola {{ icon("arrow-right") }}</a></td>
         </tr>
         {% endfor %}
     </tbody></table></div>
@@ -95,7 +95,7 @@
             <td><b>{{ b.start|when }}</b><small>{{ b.code }}</small></td>
             <td>{{ b.service_name }}<small>{{ b.barber_name }}</small></td>
             <td><span class="badge {{ b.status }}">{{ status_labels[b.status] }}</span></td>
-            <td><a class="table-link" href="{{ url_for('booking_detail', token=b.token) }}">Detail ↗</a></td>
+            <td><a class="table-link" href="{{ url_for('booking_detail', token=b.token) }}">Detail {{ icon("arrow-right") }}</a></td>
         </tr>
         {% endfor %}
     </tbody></table></div>
