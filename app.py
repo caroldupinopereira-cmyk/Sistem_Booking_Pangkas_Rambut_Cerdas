@@ -31,7 +31,7 @@ from booking import (
     update_status,
     normalize_email,
 )
-from messaging import process_messages, send_verification_code
+from messaging import process_messages, send_verification_code, smtp_health
 from analytics import insights
 from notifications import inbox, mark_read, ensure_push_keys, save_subscription, process_admin_notifications
 
@@ -252,9 +252,12 @@ def create_app(test_config=None):
             if request.endpoint in {"dasbor_booking", "change", "walkin", "admin_booking"}:
                 try:
                     process_messages(app.config["DATABASE"], app.config, limit=1, include_reminders=False)
+                except Exception:
+                    app.logger.error("Email pelanggan tertunda; periksa Pesan Email.")
+                try:
                     process_admin_notifications(app.config["DATABASE"], app.config, limit=1)
                 except Exception:
-                    app.logger.error("Outbox tertunda; periksa Pesan Email atau scheduler.")
+                    app.logger.error("Email admin tertunda; periksa Pesan Email.")
         return response
 
     @app.route("/api/cron/messages")
@@ -303,7 +306,7 @@ def create_app(test_config=None):
             customer=cust,
             has_admin=has_admin,
             google_enabled=google_enabled(),
-            mail_mode=str(app.config.get("MAIL_MODE", "demo")).lower(),
+            mail_mode=str(app.config.get("MAIL_MODE", "demo")).strip().lower(),
             database_online=isinstance(app.config["DATABASE"], TursoDatabase),
             today=now().date().isoformat(),
         )
@@ -965,6 +968,7 @@ def create_app(test_config=None):
                 flash("Pemrosesan tertunda; coba lagi setelah beberapa saat.", "error")
             return redirect(url_for("messages"))
         with db() as c:
+            admin_rows = c.execute("SELECT n.*,a.email FROM admin_notifications n LEFT JOIN admins a ON a.id=(SELECT MIN(id) FROM admins) ORDER BY n.id DESC LIMIT 40").fetchall()
             rows = c.execute(
                 "SELECT m.*,b.code,b.name,b.email FROM messages m JOIN bookings b ON b.id=m.booking_id ORDER BY m.id DESC LIMIT 80"
             ).fetchall()
@@ -973,7 +977,33 @@ def create_app(test_config=None):
             ).fetchall()
         combined = [dict(r) for r in rows] + [dict(r) | {"code": "AKUN", "name": "Pelanggan"} for r in verifs]
         combined.sort(key=lambda x: (str(x.get("processed_at") or x.get("due") or ""), x.get("id", 0)), reverse=True)
-        return render_template("messages.html", rows=combined[:120])
+        return render_template("messages.html", rows=combined[:120], admin_rows=admin_rows, smtp_info=smtp_health(app.config))
+
+    @app.route("/admin/messages/<kind>/<int:message_id>/retry", methods=["POST"])
+    @admin_only
+    def retry_email(kind, message_id):
+        if not smtp_health(app.config)["ready"]:
+            flash("Lengkapi konfigurasi SMTP sebelum mencoba ulang.", "error")
+            return redirect(url_for("messages"))
+        table, column = {"customer": ("messages","status"), "admin": ("admin_notifications","email_status")}.get(kind, (None,None))
+        if not table:
+            abort(404)
+        with db() as c:
+            c.execute("BEGIN IMMEDIATE")
+            row = c.execute(f"SELECT {column} state FROM {table} WHERE id=?", (message_id,)).fetchone()
+            if not row or row["state"] != "failed":
+                flash("Hanya pesan berstatus Gagal yang dapat dicoba ulang. Status tidak pasti perlu diperiksa terlebih dahulu.", "error")
+                return redirect(url_for("messages"))
+            c.execute(f"UPDATE {table} SET {column}='pending' WHERE id=?", (message_id,))
+        try:
+            if kind == "customer":
+                process_messages(app.config["DATABASE"],app.config,limit=1,message_id=message_id)
+            else:
+                process_admin_notifications(app.config["DATABASE"],app.config,limit=1,notification_id=message_id)
+            flash("Percobaan pengiriman selesai. Periksa status pesan.", "success")
+        except Exception:
+            flash("Pemrosesan tertunda. Periksa status sebelum mencoba lagi.", "error")
+        return redirect(url_for("messages"))
 
     @app.route("/admin/analytics")
     @admin_only

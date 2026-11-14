@@ -84,10 +84,10 @@ def _send_push(subscription, private_key, admin_email, title, notification_id):
     return webpush(subscription_info=json.loads(subscription), data=json.dumps({"title": title, "body": "Ada pembaruan booking. Buka dashboard admin untuk melihat detail.", "url": "/admin#notifikasi", "tag": "booking-" + str(notification_id)}), vapid_private_key=Vapid.from_pem(private_key.encode()), vapid_claims={"sub": "mailto:" + admin_email}, timeout=4, ttl=3600)
 
 
-def process_admin_notifications(path, config, limit=1):
-    from messaging import _send_smtp, _smtp_ready
+def process_admin_notifications(path, config, limit=1, notification_id=None):
+    from messaging import _send_smtp, _smtp_ready, smtp_error
     with connect(path) as db:
-        rows = db.execute("SELECT id FROM admin_notifications n WHERE email_status='pending' OR EXISTS (SELECT 1 FROM push_deliveries p WHERE p.notification_id=n.id AND p.status='pending') ORDER BY id LIMIT ?", (limit,)).fetchall()
+        rows = db.execute("SELECT id FROM admin_notifications n WHERE (email_status='pending' OR EXISTS (SELECT 1 FROM push_deliveries p WHERE p.notification_id=n.id AND p.status='pending'))" + (" AND n.id=?" if notification_id is not None else "") + " ORDER BY id LIMIT ?", (int(notification_id),limit) if notification_id is not None else (limit,)).fetchall()
     count = 0
     for row in rows:
         with connect(path) as db:
@@ -105,15 +105,16 @@ def process_admin_notifications(path, config, limit=1):
             state, error = "simulated", ""
             if not admin:
                 state = "skipped"
-            elif str(config.get("MAIL_MODE", "demo")).lower() == "smtp":
-                try:
-                    if not _smtp_ready(config):
-                        raise ValueError()
-                    body = event["body"] + "\n\nBuka dashboard: " + str(config.get("PUBLIC_BASE_URL", "http://127.0.0.1:5000")).rstrip("/") + "/admin#notifikasi"
-                    _send_smtp(config, admin["email"], event["title"] + " - Ruang Pangkas", body)
-                    state = "accepted"
-                except Exception:
-                    state, error = "unknown", "Pengiriman email admin perlu diperiksa; tidak dicoba ulang otomatis."
+            elif str(config.get("MAIL_MODE", "demo")).strip().lower() == "smtp":
+                if not _smtp_ready(config):
+                    state, error = "failed", "Konfigurasi SMTP belum lengkap atau tidak valid. Periksa panel konfigurasi email."
+                else:
+                    try:
+                        body = event["body"] + "\n\nBuka dashboard: " + str(config.get("PUBLIC_BASE_URL", "http://127.0.0.1:5000")).rstrip("/") + "/admin#notifikasi"
+                        _send_smtp(config, admin["email"], event["title"] + " - Ruang Pangkas", body)
+                        state = "accepted"
+                    except Exception as exc:
+                        state, error = smtp_error(exc)
             with connect(path) as db:
                 db.execute("UPDATE admin_notifications SET email_status=?,email_error=? WHERE id=?", (state,error,event["id"]))
         for push in pushes:

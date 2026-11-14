@@ -162,3 +162,17 @@ ke Turso sekali untuk membuat tabel tambahan; data booking tidak dihapus.
 
 Push perangkat berjalan terpisah dari mode email. Untuk simulasi push pengujian,
 set PUSH_MODE=demo; default live hanya mengirim ke perangkat yang telah didaftarkan admin.
+
+## Memeriksa email pelanggan dan admin
+
+Admin > Pesan Email menampilkan mode serta nama variabel SMTP yang belum terbaca
+atau tidak valid pada server yang sedang digunakan, tanpa menampilkan password.
+Tambahkan nilai variabel dari file pribadi work/vercel-email.env ke Vercel Production
+lalu Redeploy jika diperlukan. SMTP port 587 memakai STARTTLS dengan validasi sertifikat;
+port 465 memakai TLS langsung. Spasi pemisah App Password Gmail dihapus saat login.
+
+Konfigurasi lengkap tidak membuktikan email sudah masuk Inbox; periksa status kiriman
+dan folder Spam. Pesan Gagal dapat dicoba ulang secara manual, khusus pesan yang
+bersangkutan. Status unknown/dispatching/accepted tidak boleh dikirim ulang dari tombol
+ini karena berpotensi menimbulkan duplikasi. Email admin mempunyai tabel status sendiri.
+Perbaikan kode tidak mengirim ulang pesan gagal lama secara otomatis.

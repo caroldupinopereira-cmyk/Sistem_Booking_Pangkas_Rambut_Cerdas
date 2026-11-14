@@ -3,6 +3,7 @@
 import logging
 import smtplib
 import socket
+import ssl
 from email.message import EmailMessage
 from database import connect
 from booking import now, stamp, get_booking, parse
@@ -40,9 +41,33 @@ def _build(b, kind, link):
     return subject, body, preview
 
 
+def smtp_health(config):
+    required = ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD")
+    missing = [key for key in required if not str(config.get(key) or "").strip()]
+    invalid = [key for key in required if str(config.get(key) or "").startswith(key + "=")]
+    if "SMTP_PORT" not in missing:
+        try:
+            if not 1 <= int(config["SMTP_PORT"]) <= 65535:
+                invalid.append("SMTP_PORT")
+        except (ValueError, TypeError):
+            invalid.append("SMTP_PORT")
+    mode = str(config.get("MAIL_MODE", "demo") or "demo").strip().lower()
+    return {"mode": mode, "ready": mode == "smtp" and not missing and not invalid,
+            "missing": missing, "invalid": sorted(set(invalid)),
+            "checks": [{"name": key, "configured": key not in missing and key not in invalid} for key in required]}
+
+
 def _smtp_ready(config):
-    keys = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD"]
-    return all(str(config.get(k, "")).strip() for k in keys)
+    health = smtp_health(config)
+    return not health["missing"] and not health["invalid"]
+
+
+def smtp_error(error):
+    if isinstance(error, smtplib.SMTPAuthenticationError):
+        return "failed", "Autentikasi SMTP gagal. Periksa email dan App Password."
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return "failed", "Alamat email penerima ditolak oleh server."
+    return "unknown", "Status pengiriman email tidak pasti. Periksa penyedia; tidak dicoba ulang otomatis."
 
 
 def _send_smtp(config, to_addr, subject, body):
@@ -53,6 +78,8 @@ def _send_smtp(config, to_addr, subject, body):
         port = 587
     user = str(config.get("SMTP_USER", "")).strip()
     password = str(config.get("SMTP_PASSWORD", ""))
+    if host.strip().lower() == "smtp.gmail.com":
+        password = password.replace(" ", "")
     sender = str(config.get("MAIL_FROM", "") or user).strip() or user
 
     msg = EmailMessage()
@@ -68,10 +95,14 @@ def _send_smtp(config, to_addr, subject, body):
     )
     msg.add_alternative(f"<html><body><p>{safe}</p></body></html>", subtype="html")
 
-    with smtplib.SMTP(host, port, timeout=10) as server:
+    context = ssl.create_default_context()
+    transport = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
+    options = {"context": context} if port == 465 else {}
+    with transport(host, port, timeout=10, **options) as server:
         server.ehlo()
-        server.starttls()
-        server.ehlo()
+        if port != 465:
+            server.starttls(context=context)
+            server.ehlo()
         server.login(user, password)
         server.send_message(msg)
     return msg.get("Message-ID")
@@ -87,7 +118,7 @@ def send_verification_code(path, config, email, code):
         "Jika Anda tidak meminta kode ini, abaikan email ini."
     )
     preview = f"Kode verifikasi dikirim ke {email}. Berlaku 10 menit."
-    mode = str(config.get("MAIL_MODE", "demo") or "demo").lower()
+    mode = str(config.get("MAIL_MODE", "demo") or "demo").strip().lower()
     status = "simulated"
     error = ""
     if mode == "demo":
@@ -108,7 +139,7 @@ def send_verification_code(path, config, email, code):
     return True
 
 
-def process_messages(path, config, limit=10, include_reminders=True):
+def process_messages(path, config, limit=10, include_reminders=True, message_id=None):
     """Claim durably before SMTP; never hold a remote write transaction during I/O.
 
     A process interrupted after claiming leaves 'dispatching' for manual review.
@@ -118,8 +149,9 @@ def process_messages(path, config, limit=10, include_reminders=True):
         rows = db.execute(
             "SELECT id FROM messages WHERE status='pending' AND due<=? "
             + ("" if include_reminders else "AND kind!='reminder' ")
+            + ("AND id=? " if message_id is not None else "")
             + "ORDER BY due,id LIMIT ?",
-            (stamp(now()), int(limit)),
+            (stamp(now()), int(message_id), int(limit)) if message_id is not None else (stamp(now()), int(limit)),
         ).fetchall()
     count = 0
     for candidate in rows:
@@ -144,7 +176,7 @@ def process_messages(path, config, limit=10, include_reminders=True):
             )
         # The committed claim prevents concurrent invocations from sending twice.
         status, error, pid = "simulated", "", None
-        mode = str(config.get("MAIL_MODE", "demo") or "demo").lower()
+        mode = str(config.get("MAIL_MODE", "demo") or "demo").strip().lower()
         if mode == "smtp":
             if not _smtp_ready(config):
                 status, error = "failed", "Konfigurasi SMTP belum lengkap."
@@ -152,12 +184,8 @@ def process_messages(path, config, limit=10, include_reminders=True):
                 try:
                     pid = _send_smtp(config, b["email"], subject, body)
                     status = "accepted"
-                except smtplib.SMTPAuthenticationError:
-                    status, error = "failed", "Autentikasi SMTP gagal. Periksa email dan App Password."
-                except smtplib.SMTPRecipientsRefused:
-                    status, error = "failed", "Alamat email penerima ditolak oleh server."
-                except Exception:
-                    status, error = "unknown", "Status pengiriman email tidak pasti. Periksa penyedia; tidak dicoba ulang otomatis."
+                except Exception as exc:
+                    status, error = smtp_error(exc)
         with connect(path) as db:
             db.execute(
                 "UPDATE messages SET status=?,error=?,provider_id=?,processed_at=? WHERE id=? AND status='dispatching'",

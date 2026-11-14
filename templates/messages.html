@@ -11,6 +11,15 @@
             {{ csrf_field() }}<button class="btn primary">Proses pesan jatuh tempo {{ icon("mail") }}</button>
         </form>
     </div>
+    <section class="panel">
+        <h2>Konfigurasi email di server ini</h2>
+        <p>Mode: <b>{{ smtp_info.mode }}</b> · <b>{{ 'Konfigurasi lengkap' if smtp_info.ready else 'Perlu diperbaiki' }}</b></p>
+        <div class="form-grid">{% for check in smtp_info.checks %}<p><code>{{ check.name }}</code>: <b>{{ 'Terisi' if check.configured else 'Belum terisi / tidak valid' }}</b></p>{% endfor %}</div>
+        {% if smtp_info.missing %}<div class="flash error">Belum terbaca: {{ smtp_info.missing|join(', ') }}. Isi variabel tersebut di Vercel untuk Production, lalu Redeploy.</div>{% endif %}
+        {% if smtp_info.invalid %}<div class="flash error">Periksa nilai: {{ smtp_info.invalid|join(', ') }}. Masukkan nilainya saja, tanpa nama variabel dan tanda sama dengan.</div>{% endif %}
+        {% if smtp_info.mode != 'smtp' %}<p class="help">Pengiriman sungguhan memerlukan MAIL_MODE=smtp.</p>{% endif %}
+        <p class="help">Nilai password tidak ditampilkan. Gmail memerlukan sandi aplikasi, bukan password login Google. Port 587 menggunakan STARTTLS; port 465 menggunakan TLS langsung.</p>
+    </section>
     <div class="notice">
         {% if mail_mode=="demo" %}
             <b>Mode simulasi.</b> Tidak ada email yang dikirim ke pelanggan. Pengiriman asli memerlukan konfigurasi SMTP (mis. Gmail App Password).{% else %}
@@ -53,6 +62,7 @@
                                     {% if m.error %}
                                         <small class="error-text">{{ m.error }}</small>
                                     {% endif %}
+                                    {% if m.status == 'failed' and m.kind != 'verification' %}<form method="post" action="{{ url_for('retry_email',kind='customer',message_id=m.id) }}">{{ csrf_field() }}<button class="btn small outline" {% if not smtp_info.ready %}disabled{% endif %}>Coba kirim lagi</button></form>{% endif %}
                                 </td>
                             </tr>
                         {% endfor %}
@@ -66,6 +76,13 @@
                 <p>Antrean dibuat setelah booking dengan email dan persetujuan pemberitahuan.</p>
             </div>
         {% endif %}
+    </section>
+    <section class="panel">
+        <h2>Email pemberitahuan admin</h2>
+        {% if admin_rows %}<div class="table-scroll"><table><thead><tr><th>Pemberitahuan</th><th>Status</th><th>Keterangan</th></tr></thead><tbody>
+        {% for n in admin_rows %}<tr><td><b>{{ n.title }}</b><small>{{ n.created|when }} WIB · {{ n.email or 'Akun admin belum tersedia' }}</small></td><td>{{ {'pending':'Terjadwal','dispatching':'Diproses / perlu diperiksa','simulated':'Simulasi','accepted':'Diterima penyedia','failed':'Gagal','unknown':'Perlu diperiksa','skipped':'Tidak dikirim'}.get(n.email_status,n.email_status) }}</td><td>{{ n.email_error }}{% if n.email_status == 'failed' %}<form method="post" action="{{ url_for('retry_email',kind='admin',message_id=n.id) }}">{{ csrf_field() }}<button class="btn small outline" {% if not smtp_info.ready %}disabled{% endif %}>Coba kirim lagi</button></form>{% endif %}</td></tr>{% endfor %}
+        </tbody></table></div>{% else %}<p class="muted">Belum ada email admin. Pemberitahuan dicatat untuk aktivitas pelanggan baru setelah fitur diaktifkan.</p>{% endif %}
+        <p class="help">Pesan Gagal dapat dicoba ulang setelah konfigurasi diperbaiki. Pesan dengan status tidak pasti tidak diulang otomatis untuk menghindari kiriman ganda.</p>
     </section>
     <p class="help">Saat lokal, worker memeriksa setiap 15 detik. Di Vercel, email transaksi diproses saat perubahan disimpan; pengingat memerlukan scheduler. Status diproses yang menetap perlu diperiksa dan tidak dikirim ulang otomatis.</p>
 {% endblock %}

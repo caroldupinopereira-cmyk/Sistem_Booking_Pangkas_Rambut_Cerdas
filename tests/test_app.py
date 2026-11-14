@@ -762,5 +762,76 @@ class BookingTests(unittest.TestCase):
             email.assert_not_called()
 
 
+    def test_smtp_diagnostics_are_private_and_validate_values(self):
+        from messaging import smtp_health
+        config=self._smtp_config()
+        health=smtp_health(config)
+        self.assertTrue(health["ready"])
+        self.assertNotIn(config["SMTP_PASSWORD"],str(health))
+        config["SMTP_PASSWORD"]=None
+        self.assertIn("SMTP_PASSWORD",smtp_health(config)["missing"])
+        config["SMTP_PASSWORD"]="SMTP_PASSWORD=wrong"
+        self.assertIn("SMTP_PASSWORD",smtp_health(config)["invalid"])
+        self.login()
+        self.app.config.update(self._smtp_config())
+        response=self.client.get("/admin/messages")
+        self.assertIn("Konfigurasi email",response.get_data(as_text=True))
+        self.assertNotIn("app-password-rahasia",response.get_data(as_text=True))
+
+    def test_smtp_ssl_and_gmail_password_spaces(self):
+        from messaging import _send_smtp
+        config=self._smtp_config() | {"SMTP_PORT":"465","SMTP_PASSWORD":"abcd efgh ijkl mnop"}
+        with patch("messaging.smtplib.SMTP_SSL") as secure, patch("messaging.smtplib.SMTP") as regular:
+            server=secure.return_value.__enter__.return_value
+            _send_smtp(config,"recipient@example.com","subject","body")
+            regular.assert_not_called()
+            server.starttls.assert_not_called()
+            server.login.assert_called_once_with("pengirim@example.com","abcdefghijklmnop")
+            self.assertIn("context",secure.call_args.kwargs)
+
+    def test_customer_retry_targets_failed_message_only(self):
+        self.login()
+        self.app.config.update(self._smtp_config())
+        self.make()
+        self.make("2026-10-10T11:00:00")
+        with connect(self.path) as db:
+            message_id=db.execute("SELECT MIN(id) FROM messages WHERE kind='confirmation'").fetchone()[0]
+            db.execute("UPDATE messages SET status='failed' WHERE id=?",(message_id,))
+        with patch("messaging._send_smtp",return_value=None) as sender:
+            self.assertEqual(self.post(f"/admin/messages/customer/{message_id}/retry",{}).status_code,302)
+            sender.assert_called_once()
+            self.post(f"/admin/messages/customer/{message_id}/retry",{})
+            self.assertEqual(sender.call_count,1)
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT status FROM messages WHERE id=?",(message_id,)).fetchone()[0],"accepted")
+            db.execute("UPDATE messages SET status='unknown' WHERE id=?",(message_id,))
+        with patch("messaging._send_smtp") as sender:
+            self.post(f"/admin/messages/customer/{message_id}/retry",{})
+            sender.assert_not_called()
+
+    def test_admin_email_missing_config_is_retryable_failure(self):
+        from notifications import process_admin_notifications
+        self.login()
+        self.make()
+        process_admin_notifications(self.path,{"MAIL_MODE":"smtp"})
+        with connect(self.path) as db:
+            row=db.execute("SELECT * FROM admin_notifications").fetchone()
+            self.assertEqual(row["email_status"],"failed")
+            notification_id=row["id"]
+        self.app.config.update(self._smtp_config())
+        with patch("messaging._send_smtp",return_value=None) as sender:
+            self.post(f"/admin/messages/admin/{notification_id}/retry",{})
+            sender.assert_called_once()
+        with connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT email_status FROM admin_notifications WHERE id=?",(notification_id,)).fetchone()[0],"accepted")
+
+    def test_customer_dispatch_error_does_not_block_admin_email(self):
+        self.login()
+        token=self.make()
+        with patch.dict("os.environ",{"VERCEL":"1"}), patch("app.process_messages",side_effect=RuntimeError()), patch("app.process_admin_notifications",return_value=1) as admin, patch.object(self.app.logger,"error"):
+            self.post("/booking/"+token+"/change",{"action":"cancel"})
+            admin.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
