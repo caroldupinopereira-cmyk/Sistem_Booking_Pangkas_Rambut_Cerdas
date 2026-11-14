@@ -97,26 +97,38 @@ def slots(db, service_id, barber_id, date, exclude=None, at=None, duration=None)
     if not service:
         raise BookingError("Layanan tidak tersedia.")
     duration = duration or service["duration"]
+    at = at or now()
+    latest = at + timedelta(days=60)
+    if day.date() < at.date() or day.date() > latest.date():
+        return []
     h = db.execute("SELECT * FROM hours WHERE weekday=?", (day.weekday(),)).fetchone()
     if not h or h["is_closed"]:
         return []
-    t = parse(date + "T" + h["opened"])
+    if not db.execute("SELECT 1 FROM barbers WHERE id=? AND active=1", (barber_id,)).fetchone():
+        return []
+    opened = parse(date + "T" + h["opened"])
     stop = parse(date + "T" + h["closed"])
+    # Fetch occupied intervals once. Per-slot SQL round trips are prohibitively
+    # slow against Turso. Saving still revalidates inside BEGIN IMMEDIATE.
+    blocks = db.execute(
+        "SELECT start,end FROM blocks WHERE (barber_id=? OR barber_id IS NULL) AND start<? AND end>?",
+        (barber_id, stamp(stop), stamp(opened)),
+    ).fetchall()
+    bookings = db.execute(
+        "SELECT start,end FROM bookings WHERE barber_id=? AND id!=? "
+        "AND status IN ('scheduled','arrived','serving','completed') AND start<? AND end>?",
+        (barber_id, exclude or -1, stamp(stop), stamp(opened)),
+    ).fetchall()
+    occupied = [(parse(row["start"]), parse(row["end"])) for row in [*blocks, *bookings]]
+    if h["break_start"]:
+        occupied.append((parse(date + "T" + h["break_start"]), parse(date + "T" + h["break_end"])))
+    t = opened.replace(minute=(opened.minute // 15) * 15, second=0)
     result = []
-    # Grid fixed to quarter-hour, including when opening hour was adjusted.
-    t = t.replace(minute=(t.minute // 15) * 15, second=0)
     while t < stop:
-        try:
-            end = validate_slot(db, barber_id, t, duration, exclude, at)
-            result.append(
-                {
-                    "value": stamp(t),
-                    "label": t.strftime("%H:%M"),
-                    "end": end.strftime("%H:%M"),
-                }
-            )
-        except BookingError:
-            pass
+        end = t + timedelta(minutes=duration)
+        if (at <= t <= latest and t >= opened and end <= stop
+                and not any(t < busy_end and end > busy_start for busy_start, busy_end in occupied)):
+            result.append({"value": stamp(t), "label": t.strftime("%H:%M"), "end": end.strftime("%H:%M")})
         t += timedelta(minutes=15)
     return result
 

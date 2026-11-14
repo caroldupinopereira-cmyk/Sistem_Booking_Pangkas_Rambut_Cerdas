@@ -553,5 +553,37 @@ class BookingTests(unittest.TestCase):
             self.assertEqual(sender.call_count, 1)
 
 
+    def test_slot_listing_uses_five_queries(self):
+        from types import SimpleNamespace
+        with connect(self.path) as db:
+            execute = MagicMock(wraps=db.execute)
+            result = slots(SimpleNamespace(execute=execute), 1, 1, "2026-10-10", at=BASE)
+            self.assertGreater(len(result), 20)
+            self.assertEqual(execute.call_count, 5)
+
+    def test_bulk_slots_match_authoritative_validation(self):
+        from booking import validate_slot, parse
+        from datetime import timedelta
+        token = self.make()
+        with connect(self.path) as db:
+            db.execute("INSERT INTO blocks(barber_id,start,end,reason) VALUES (NULL,?,?,?)", ("2026-10-10T14:10:00", "2026-10-10T14:40:00", "Blokir bersama"))
+            db.execute("UPDATE hours SET opened='09:07' WHERE weekday=5")
+        with connect(self.path) as db:
+            booking_id = get_booking(db, token)["id"]
+            for barber, exclude, duration in [(1,None,45),(2,None,45),(1,booking_id,30)]:
+                with self.subTest(barber=barber, exclude=exclude):
+                    expected = []
+                    candidate = parse("2026-10-10T09:00:00")
+                    while candidate < parse("2026-10-10T20:00:00"):
+                        try:
+                            validate_slot(db,barber,candidate,duration,exclude=exclude,at=BASE)
+                            expected.append(stamp(candidate))
+                        except BookingError:
+                            pass
+                        candidate += timedelta(minutes=15)
+                    actual = slots(db,1,barber,"2026-10-10",exclude=exclude,at=BASE,duration=duration)
+                    self.assertEqual([slot["value"] for slot in actual],expected)
+
+
 if __name__ == "__main__":
     unittest.main()

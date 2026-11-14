@@ -36,16 +36,23 @@ document.querySelectorAll('.slot-form').forEach(form => {
         }
         try {
             const response = await fetch('/api/slots?' + query.toString(), {
+                cache: 'no-store',
+                signal: AbortSignal.timeout(25000),
                 headers: {
                     Accept: 'application/json'
                 }
             });
+            if (!response.headers.get('content-type')?.includes('application/json')) {
+                throw new Error('Jadwal gagal dimuat dari server. Muat ulang halaman atau coba lagi sebentar.');
+            }
             const data = await response.json();
             if (current !== revision) return;
             list.replaceChildren();
             if (!response.ok) throw new Error(data.error || 'Jadwal belum dapat dimuat.');
             if (!data.slots.length) {
-                msg.textContent = 'Belum ada slot pada pilihan ini. Coba tanggal atau kapster lain.';
+                msg.textContent = date.value === date.min
+                    ? 'Tidak ada jam tersedia hari ini. Jika jam operasional sudah lewat atau penuh, pilih tanggal besok atau kapster lain.'
+                    : 'Tidak ada jam tersedia pada tanggal ini. Coba tanggal atau kapster lain, atau hubungi admin untuk mengecek jam kerja.';
                 list.append(msg);
                 return;
             }
@@ -71,7 +78,15 @@ document.querySelectorAll('.slot-form').forEach(form => {
         } catch (error) {
             if (current !== revision) return;
             list.replaceChildren();
-            msg.textContent = error.message || 'Koneksi gagal. Ubah tanggal untuk mencoba lagi.';
+            msg.textContent = error.name === 'TimeoutError'
+                ? 'Memuat jadwal terlalu lama. Coba lagi atau pilih tanggal lain.'
+                : (error.message || 'Koneksi gagal. Ubah tanggal untuk mencoba lagi.');
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'btn outline small';
+            retry.textContent = 'Coba lagi';
+            retry.addEventListener('click', load);
+            list.append(retry);
             list.append(msg);
         }
     }

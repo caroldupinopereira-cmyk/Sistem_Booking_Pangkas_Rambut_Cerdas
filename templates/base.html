@@ -6,7 +6,7 @@
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <title>{% block title %}{{ shop.shop_name }}{% endblock %} · Booking Pangkas</title>
         <link rel="stylesheet" href="{{ url_for('static',filename='style.css',v=asset_version) }}">
-        <script src="{{ url_for('static',filename='app.js') }}" defer></script>
+        <script src="{{ url_for('static',filename='app.js',v=script_version) }}" defer></script>
     </head>
     <body class="{% if request.path.startswith('/admin') %}admin-body{% endif %}">
         <a class="skip" href="#main">Lewati navigasi</a>

@@ -265,7 +265,7 @@ def create_app(test_config=None):
             "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         )
         if request.path.startswith(
-            ("/admin", "/booking", "/login", "/setup", "/masuk", "/daftar", "/verifikasi", "/dasbor", "/keluar", "/auth")
+            ("/admin", "/booking", "/login", "/setup", "/masuk", "/daftar", "/verifikasi", "/dasbor", "/keluar", "/auth", "/api/")
         ):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -281,6 +281,7 @@ def create_app(test_config=None):
                 cust = c.execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
         return dict(
             asset_version=(ROOT / "static" / "style.css").stat().st_mtime_ns,
+            script_version=(ROOT / "static" / "app.js").stat().st_mtime_ns,
             shop=cfg,
             status_labels=STATUS,
             days=DAYS,
