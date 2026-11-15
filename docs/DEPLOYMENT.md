@@ -138,3 +138,10 @@ tambahkan ke Layar Utama lalu buka dari ikon tersebut. Buat booking percobaan da
 akun pelanggan dan periksa inbox, email admin, serta pemberitahuan perangkat.
 Uji push nyata memerlukan tindakan izin pengguna; tes otomatis memakai pengiriman
 mock. Jangan mengklaim pengiriman OS sudah diuji hanya karena tes otomatis lulus.
+
+## Lokasi kode setelah perapian
+
+Kode aplikasi berada di ruang_pangkas/, HTML di templates/, dan aset di static/.
+Entry point Vercel tetap wsgi:app. build.py tetap berada di root sesuai pyproject.toml.
+Perintah lokal python app.py dan python admin_account.py tetap didukung melalui
+entry point tipis; alat administrasi sebenarnya berada di scripts/.

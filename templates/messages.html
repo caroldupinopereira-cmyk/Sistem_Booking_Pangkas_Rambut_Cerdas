@@ -20,6 +20,7 @@
         {% if smtp_info.mode != 'smtp' %}<p class="help">Pengiriman sungguhan memerlukan MAIL_MODE=smtp.</p>{% endif %}
         <p class="help">Nilai password tidak ditampilkan. Gmail memerlukan sandi aplikasi, bukan password login Google. Port 587 menggunakan STARTTLS; port 465 menggunakan TLS langsung.</p>
     </section>
+    <p class="help">Antrean diproses bertahap. Jika masih ada pesan jatuh tempo, proses lagi setelah percobaan sebelumnya selesai.</p>
     <div class="notice">
         {% if mail_mode=="demo" %}
             <b>Mode simulasi.</b> Tidak ada email yang dikirim ke pelanggan. Pengiriman asli memerlukan konfigurasi SMTP (mis. Gmail App Password).{% else %}

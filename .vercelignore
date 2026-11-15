@@ -14,3 +14,5 @@ __pycache__/
 *.sqlite3-*
 *.db
 secret.key
+
+docs/

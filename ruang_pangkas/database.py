@@ -231,8 +231,7 @@ def init_db(path):
             if "phone" in cols or "wa_consent" in cols or "email" not in cols:
                 raise RuntimeError(
                     "Skema database lama terdeteksi (kolom WhatsApp/nomor). "
-                    "Hapus file instance/barbershop.sqlite3 lalu jalankan aplikasi kembali. "
-                    "File tersebut tidak dihapus otomatis."
+                    "Jangan hapus database. Buat backup dan jalankan migrasi skema terlebih dahulu."
                 )
             if "customer_id" not in cols:
                 db.execute("ALTER TABLE bookings ADD COLUMN customer_id INTEGER REFERENCES customers(id)")
@@ -243,15 +242,9 @@ def init_db(path):
             if "username" in cols or "email" not in cols:
                 raise RuntimeError(
                     "Skema database lama terdeteksi (kolom username admin). "
-                    "Hapus file instance/barbershop.sqlite3 lalu jalankan aplikasi kembali. "
-                    "File tersebut tidak dihapus otomatis."
+                    "Jangan hapus database. Buat backup dan jalankan migrasi skema terlebih dahulu."
                 )
-        # Buang sisa fitur login pelanggan versi lama bila ada.
-        for old in ("login_codes",):
-            if db.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (old,)
-            ).fetchone():
-                db.execute(f"DROP TABLE {old}")
+        # Legacy tables are preserved; destructive migrations require a separate tool.
         db.executescript(SCHEMA)
         if db.execute("SELECT COUNT(*) FROM admins").fetchone()[0] > 1:
             raise RuntimeError("Database memiliki lebih dari satu admin. Tinjau akun sebelum melanjutkan; tidak ada akun yang dihapus otomatis.")

@@ -3,8 +3,8 @@ from pathlib import Path
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 from concurrent.futures import ThreadPoolExecutor
-from database import connect, init_db
-from booking import (
+from ruang_pangkas.database import connect, init_db
+from ruang_pangkas.booking import (
     create_booking,
     change_booking,
     get_booking,
@@ -14,24 +14,24 @@ from booking import (
     normalize_email,
     stamp,
 )
-from messaging import process_messages
-from analytics import insights
-from app import create_app
+from ruang_pangkas.messaging import process_messages
+from ruang_pangkas.analytics import insights
+from ruang_pangkas.web import create_app
 
 BASE = datetime(2026, 10, 9, 8, 0)
 
 
 class BookingTests(unittest.TestCase):
     def setUp(self):
-        self.test_root = Path(__file__).resolve().parents[1] / "work"
-        self.test_root.mkdir(exist_ok=True)
+        self.test_root = Path(__file__).resolve().parents[1] / "work" / "tests"
+        self.test_root.mkdir(parents=True,exist_ok=True)
         self.tmp = tempfile.TemporaryDirectory(dir=self.test_root)
         self.path = Path(self.tmp.name) / "test.sqlite3"
         init_db(self.path)
         self.clock = BASE
         self.patches = [
             patch(m + ".now", side_effect=lambda: self.clock)
-            for m in ["booking", "messaging", "analytics", "app"]
+            for m in ["ruang_pangkas.booking", "ruang_pangkas.messaging", "ruang_pangkas.analytics", "ruang_pangkas.web"]
         ]
         for p in self.patches:
             p.start()
@@ -383,7 +383,7 @@ class BookingTests(unittest.TestCase):
 
     def test_demo_mode_does_not_open_smtp(self):
         self.make()
-        with patch("messaging.smtplib.SMTP") as smtp:
+        with patch("ruang_pangkas.messaging.smtplib.SMTP") as smtp:
             n = process_messages(self.path, {"MAIL_MODE": "demo"})
             self.assertEqual(n, 1)
             smtp.assert_not_called()
@@ -401,7 +401,7 @@ class BookingTests(unittest.TestCase):
 
     def test_smtp_mode_uses_smtplib_once(self):
         self.make()
-        with patch("messaging.smtplib.SMTP") as smtp:
+        with patch("ruang_pangkas.messaging.smtplib.SMTP") as smtp:
             server = MagicMock()
             smtp.return_value.__enter__.return_value = server
             n = process_messages(self.path, self._smtp_config())
@@ -428,7 +428,7 @@ class BookingTests(unittest.TestCase):
                 self.tearDown()
                 self.setUp()
                 self.make()
-                with patch("messaging.smtplib.SMTP") as smtp:
+                with patch("ruang_pangkas.messaging.smtplib.SMTP") as smtp:
                     server = MagicMock()
                     smtp.return_value.__enter__.return_value = server
                     server.send_message.side_effect = exc
@@ -460,7 +460,7 @@ class BookingTests(unittest.TestCase):
 
     def test_vercel_rejects_local_database_before_initialization(self):
         with patch.dict("os.environ", {"VERCEL": "1", "SECRET_KEY": "hosting-test-secret"}):
-            with patch("app.init_db") as initialize:
+            with patch("ruang_pangkas.web.init_db") as initialize:
                 with self.assertRaisesRegex(RuntimeError, "SQLite lokal"):
                     create_app({"TESTING": True, "DATABASE": str(self.path)})
                 initialize.assert_not_called()
@@ -477,7 +477,7 @@ class BookingTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM admins").fetchone()[0], 1)
 
     def test_admin_replacement_requires_code_and_invalidates_sessions(self):
-        from admin_account import replace_admin
+        from scripts.admin_account import replace_admin
         from werkzeug.security import check_password_hash
         self.login()
         code = "test-special-code-" + "x" * 32
@@ -504,16 +504,16 @@ class BookingTests(unittest.TestCase):
             with connect(self.path) as db:
                 db.execute("BEGIN IMMEDIATE")
                 self.assertEqual(db.execute("SELECT status FROM messages WHERE kind='confirmation'").fetchone()[0], "dispatching")
-        with patch("messaging._send_smtp", side_effect=send_without_lock) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp", side_effect=send_without_lock) as sender:
             self.assertEqual(process_messages(self.path, self._smtp_config()), 1)
             self.assertEqual(sender.call_count, 1)
 
     def test_interrupted_email_claim_is_not_retried(self):
         self.make()
-        with patch("messaging._send_smtp", side_effect=SystemExit("simulated interruption")):
+        with patch("ruang_pangkas.messaging._send_smtp", side_effect=SystemExit("simulated interruption")):
             with self.assertRaises(SystemExit):
                 process_messages(self.path, self._smtp_config())
-        with patch("messaging._send_smtp", return_value=None) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp", return_value=None) as sender:
             self.assertEqual(process_messages(self.path, self._smtp_config()), 0)
             sender.assert_not_called()
         with connect(self.path) as db:
@@ -521,7 +521,7 @@ class BookingTests(unittest.TestCase):
 
     def test_cron_requires_secret_and_limits_processing(self):
         self.app.config["CRON_SECRET"] = "x" * 40
-        with patch("app.process_messages", return_value=1) as processor:
+        with patch("ruang_pangkas.web.process_messages", return_value=1) as processor:
             self.assertEqual(self.client.get("/api/cron/messages").status_code, 401)
             self.assertEqual(self.client.get("/api/cron/messages", headers={"Authorization": "Bearer wrong"}).status_code, 401)
             processor.assert_not_called()
@@ -534,7 +534,7 @@ class BookingTests(unittest.TestCase):
         token = self.make()
         self.login()
         with patch.dict("os.environ", {"VERCEL": "1"}):
-            with patch("app.process_messages", return_value=1) as processor:
+            with patch("ruang_pangkas.web.process_messages", return_value=1) as processor:
                 response = self.post("/booking/" + token + "/change", {"action": "cancel"})
                 self.assertEqual(response.status_code, 302)
                 processor.assert_called_once_with(self.app.config["DATABASE"], self.app.config, limit=1, include_reminders=False, booking_token=token)
@@ -546,7 +546,7 @@ class BookingTests(unittest.TestCase):
         def run(_):
             barrier.wait()
             return process_messages(self.path, self._smtp_config())
-        with patch("messaging._send_smtp", return_value=None) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp", return_value=None) as sender:
             with ThreadPoolExecutor(max_workers=2) as pool:
                 self.assertEqual(sum(pool.map(run, range(2))), 1)
             self.assertEqual(sender.call_count, 1)
@@ -561,7 +561,7 @@ class BookingTests(unittest.TestCase):
             self.assertEqual(execute.call_count, 5)
 
     def test_bulk_slots_match_authoritative_validation(self):
-        from booking import validate_slot, parse
+        from ruang_pangkas.booking import validate_slot, parse
         from datetime import timedelta
         token = self.make()
         with connect(self.path) as db:
@@ -585,10 +585,10 @@ class BookingTests(unittest.TestCase):
 
 
     def test_vercel_boot_does_not_reinitialize_remote_schema(self):
-        from database import TursoDatabase
+        from ruang_pangkas.database import TursoDatabase
         with patch.dict("os.environ", {"VERCEL": "1", "SECRET_KEY": "test-hosting-secret"}):
-            with patch("app.init_db") as initialize:
-                with patch("app.connect", side_effect=lambda target: connect(self.path)):
+            with patch("ruang_pangkas.web.init_db") as initialize:
+                with patch("ruang_pangkas.web.connect", side_effect=lambda target: connect(self.path)):
                     hosted = create_app({"TESTING": True, "DATABASE": TursoDatabase("libsql://example.turso.io", "test-token")})
         initialize.assert_not_called()
         self.assertTrue(hosted.config["TESTING"])
@@ -612,7 +612,7 @@ class BookingTests(unittest.TestCase):
         self.assertEqual(response.json["unread"],3)
         self.assertEqual(response.json["items"][0]["title"],"Booking dibatalkan")
         self.assertNotIn("_push_private_key",response.get_data(as_text=True))
-        with patch("booking.queue",side_effect=RuntimeError("queue failed")):
+        with patch("ruang_pangkas.booking.queue",side_effect=RuntimeError("queue failed")):
             with self.assertRaises(RuntimeError):
                 self.make("2026-10-10T16:00:00")
         self.assertEqual(self.client.get("/admin/notifications").json["unread"],3)
@@ -628,10 +628,10 @@ class BookingTests(unittest.TestCase):
         self.assertEqual(self.client.get("/admin/notifications").json["unread"],1)
 
     def test_admin_email_sent_once_independent_of_customer_consent(self):
-        from notifications import process_admin_notifications
+        from ruang_pangkas.notifications import process_admin_notifications
         self.login()
         self.make(consent="0")
-        with patch("messaging._send_smtp", return_value=None) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp", return_value=None) as sender:
             self.assertEqual(process_admin_notifications(self.path,self._smtp_config()),1)
             self.assertEqual(process_admin_notifications(self.path,self._smtp_config()),0)
             sender.assert_called_once()
@@ -668,37 +668,37 @@ class BookingTests(unittest.TestCase):
 
     def test_push_delivery_and_admin_rotation(self):
         import json
-        from notifications import process_admin_notifications
-        from admin_account import replace_admin
+        from ruang_pangkas.notifications import process_admin_notifications
+        from scripts.admin_account import replace_admin
         self.login()
         self.post("/admin/notifications/push-key",{})
         self.post("/admin/notifications/subscribe",{"subscription":json.dumps(self.push_subscription())})
         self.make()
-        with patch("notifications._send_push") as push, patch("messaging._send_smtp", return_value=None):
+        with patch("ruang_pangkas.notifications._send_push") as push, patch("ruang_pangkas.messaging._send_smtp", return_value=None):
             process_admin_notifications(self.path,self._smtp_config())
             process_admin_notifications(self.path,self._smtp_config())
             push.assert_called_once()
         self.make("2026-10-11T10:00:00")
         replace_admin(self.path,"x"*32,"x"*32,"new@example.com","new-password-admin")
-        with patch("notifications._send_push") as push, patch("messaging._send_smtp",return_value=None) as sender:
+        with patch("ruang_pangkas.notifications._send_push") as push, patch("ruang_pangkas.messaging._send_smtp",return_value=None) as sender:
             process_admin_notifications(self.path,self._smtp_config())
             push.assert_not_called()
             self.assertEqual(sender.call_args.args[1],"new@example.com")
 
     def test_admin_delivery_interruption_is_not_retried(self):
-        from notifications import process_admin_notifications
+        from ruang_pangkas.notifications import process_admin_notifications
         self.login()
         self.make()
-        with patch("messaging._send_smtp",side_effect=SystemExit()):
+        with patch("ruang_pangkas.messaging._send_smtp",side_effect=SystemExit()):
             with self.assertRaises(SystemExit):
                 process_admin_notifications(self.path,self._smtp_config())
-        with patch("messaging._send_smtp") as sender:
+        with patch("ruang_pangkas.messaging._send_smtp") as sender:
             self.assertEqual(process_admin_notifications(self.path,self._smtp_config()),0)
             sender.assert_not_called()
 
     def test_push_payload_is_private_and_real_key_can_sign(self):
         import json
-        from notifications import ensure_push_keys,_send_push
+        from ruang_pangkas.notifications import ensure_push_keys,_send_push
         self.login()
         with connect(self.path) as db:
             ensure_push_keys(db)
@@ -719,14 +719,14 @@ class BookingTests(unittest.TestCase):
 
 
     def test_admin_email_concurrent_processing_is_not_duplicated(self):
-        from notifications import process_admin_notifications
+        from ruang_pangkas.notifications import process_admin_notifications
         self.login()
         self.make()
         barrier=threading.Barrier(2)
         def process(_):
             barrier.wait()
             process_admin_notifications(self.path,self._smtp_config())
-        with patch("messaging._send_smtp",return_value=None) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp",return_value=None) as sender:
             with ThreadPoolExecutor(max_workers=2) as pool:
                 list(pool.map(process,range(2)))
             self.assertEqual(sender.call_count,1)
@@ -734,14 +734,14 @@ class BookingTests(unittest.TestCase):
     def test_expired_push_disables_subscription(self):
         import json
         from types import SimpleNamespace
-        from notifications import process_admin_notifications
+        from ruang_pangkas.notifications import process_admin_notifications
         self.login()
         self.post("/admin/notifications/push-key",{})
         self.post("/admin/notifications/subscribe",{"subscription":json.dumps(self.push_subscription())})
         self.make()
         failure=RuntimeError("expired")
         failure.response=SimpleNamespace(status_code=410)
-        with patch("messaging._send_smtp",return_value=None), patch("notifications._send_push",side_effect=failure):
+        with patch("ruang_pangkas.messaging._send_smtp",return_value=None), patch("ruang_pangkas.notifications._send_push",side_effect=failure):
             process_admin_notifications(self.path,self._smtp_config())
         with connect(self.path) as db:
             self.assertEqual(db.execute("SELECT active FROM push_subscriptions").fetchone()[0],0)
@@ -750,19 +750,19 @@ class BookingTests(unittest.TestCase):
 
     def test_push_delivery_does_not_require_email_smtp_mode(self):
         import json
-        from notifications import process_admin_notifications
+        from ruang_pangkas.notifications import process_admin_notifications
         self.login()
         self.post("/admin/notifications/push-key",{})
         self.post("/admin/notifications/subscribe",{"subscription":json.dumps(self.push_subscription())})
         self.make()
-        with patch("notifications._send_push") as sender, patch("messaging._send_smtp") as email:
+        with patch("ruang_pangkas.notifications._send_push") as sender, patch("ruang_pangkas.messaging._send_smtp") as email:
             process_admin_notifications(self.path,{"MAIL_MODE":"demo"})
             sender.assert_called_once()
             email.assert_not_called()
 
 
     def test_smtp_diagnostics_are_private_and_validate_values(self):
-        from messaging import smtp_health
+        from ruang_pangkas.messaging import smtp_health
         config=self._smtp_config()
         health=smtp_health(config)
         self.assertTrue(health["ready"])
@@ -778,9 +778,9 @@ class BookingTests(unittest.TestCase):
         self.assertNotIn("app-password-rahasia",response.get_data(as_text=True))
 
     def test_smtp_ssl_and_gmail_password_spaces(self):
-        from messaging import _send_smtp
+        from ruang_pangkas.messaging import _send_smtp
         config=self._smtp_config() | {"SMTP_PORT":"465","SMTP_PASSWORD":"abcd efgh ijkl mnop"}
-        with patch("messaging.smtplib.SMTP_SSL") as secure, patch("messaging.smtplib.SMTP") as regular:
+        with patch("ruang_pangkas.messaging.smtplib.SMTP_SSL") as secure, patch("ruang_pangkas.messaging.smtplib.SMTP") as regular:
             server=secure.return_value.__enter__.return_value
             _send_smtp(config,"recipient@example.com","subject","body")
             regular.assert_not_called()
@@ -796,7 +796,7 @@ class BookingTests(unittest.TestCase):
         with connect(self.path) as db:
             message_id=db.execute("SELECT MIN(id) FROM messages WHERE kind='confirmation'").fetchone()[0]
             db.execute("UPDATE messages SET status='failed' WHERE id=?",(message_id,))
-        with patch("messaging._send_smtp",return_value=None) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp",return_value=None) as sender:
             self.assertEqual(self.post(f"/admin/messages/customer/{message_id}/retry",{}).status_code,302)
             sender.assert_called_once()
             self.post(f"/admin/messages/customer/{message_id}/retry",{})
@@ -804,12 +804,12 @@ class BookingTests(unittest.TestCase):
         with connect(self.path) as db:
             self.assertEqual(db.execute("SELECT status FROM messages WHERE id=?",(message_id,)).fetchone()[0],"accepted")
             db.execute("UPDATE messages SET status='unknown' WHERE id=?",(message_id,))
-        with patch("messaging._send_smtp") as sender:
+        with patch("ruang_pangkas.messaging._send_smtp") as sender:
             self.post(f"/admin/messages/customer/{message_id}/retry",{})
             sender.assert_not_called()
 
     def test_admin_email_missing_config_is_retryable_failure(self):
-        from notifications import process_admin_notifications
+        from ruang_pangkas.notifications import process_admin_notifications
         self.login()
         self.make()
         process_admin_notifications(self.path,{"MAIL_MODE":"smtp"})
@@ -818,7 +818,7 @@ class BookingTests(unittest.TestCase):
             self.assertEqual(row["email_status"],"failed")
             notification_id=row["id"]
         self.app.config.update(self._smtp_config())
-        with patch("messaging._send_smtp",return_value=None) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp",return_value=None) as sender:
             self.post(f"/admin/messages/admin/{notification_id}/retry",{})
             sender.assert_called_once()
         with connect(self.path) as db:
@@ -827,7 +827,7 @@ class BookingTests(unittest.TestCase):
     def test_customer_dispatch_error_does_not_block_admin_email(self):
         self.login()
         token=self.make()
-        with patch.dict("os.environ",{"VERCEL":"1"}), patch("app.process_messages",side_effect=RuntimeError()), patch("app.process_admin_notifications",return_value=1) as admin, patch.object(self.app.logger,"error"):
+        with patch.dict("os.environ",{"VERCEL":"1"}), patch("ruang_pangkas.web.process_messages",side_effect=RuntimeError()), patch("ruang_pangkas.web.process_admin_notifications",return_value=1) as admin, patch.object(self.app.logger,"error"):
             self.post("/booking/"+token+"/change",{"action":"cancel"})
             admin.assert_called_once()
 
@@ -840,7 +840,7 @@ class BookingTests(unittest.TestCase):
             rows=db.execute("SELECT kind,status FROM messages ORDER BY id").fetchall()
             self.assertEqual([row["kind"] for row in rows],["confirmation","reschedule","cancellation"])
             self.assertEqual([row["kind"] for row in rows if row["status"]=='pending'],["cancellation"])
-        with patch("messaging._send_smtp",return_value=None) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp",return_value=None) as sender:
             process_messages(self.path,self._smtp_config(),booking_token=token)
             sender.assert_called_once()
             self.assertTrue(sender.call_args.args[2].startswith("Pembatalan booking"))
@@ -849,7 +849,7 @@ class BookingTests(unittest.TestCase):
         first=self.make()
         second=self.make("2026-10-10T11:00:00",consent="0")
         change_booking(self.path,second,"reschedule","2026-10-10T14:00:00",actor="admin")
-        with patch("messaging._send_smtp",return_value=None) as sender:
+        with patch("ruang_pangkas.messaging._send_smtp",return_value=None) as sender:
             process_messages(self.path,self._smtp_config(),limit=1,include_reminders=False,booking_token=second)
             self.assertIn(second,sender.call_args.args[3])
         with connect(self.path) as db:
@@ -876,12 +876,46 @@ class BookingTests(unittest.TestCase):
         self.login()
         self.app.config.update(self._smtp_config())
         token=self.make(consent="0")
-        with patch.dict("os.environ",{"VERCEL":"1"}), patch("messaging._send_smtp",return_value=None) as sender, patch("app.process_admin_notifications",return_value=0):
+        with patch.dict("os.environ",{"VERCEL":"1"}), patch("ruang_pangkas.messaging._send_smtp",return_value=None) as sender, patch("ruang_pangkas.web.process_admin_notifications",return_value=0):
             response=self.post("/admin/booking/"+token,{"action":"cancel"})
             self.assertEqual(response.status_code,302)
             sender.assert_called_once()
         with connect(self.path) as db:
             self.assertEqual(db.execute("SELECT status FROM messages WHERE kind='cancellation'").fetchone()[0],"accepted")
+
+
+    def test_blank_env_secret_keeps_local_persisted_session_key(self):
+        root=Path(self.tmp.name)/"config-check"
+        (root/"instance").mkdir(parents=True)
+        (root/".env").write_text("SECRET_KEY=\n",encoding="utf-8")
+        (root/"instance"/"secret.key").write_text("persisted-local-secret-for-test",encoding="utf-8")
+        with patch("ruang_pangkas.web.ROOT",root), patch.dict("os.environ",{"SECRET_KEY":"","VERCEL":"0"}):
+            application=create_app({"TESTING":True,"DATABASE":str(self.path)})
+        self.assertEqual(application.config["SECRET_KEY"],"persisted-local-secret-for-test")
+        with application.test_request_context():
+            from flask import session
+            session["check"]="works"
+
+    def test_google_rejects_malformed_identity_and_accepts_verified_subject(self):
+        self.app.config.update(GOOGLE_CLIENT_ID="test-client",GOOGLE_CLIENT_SECRET="test-secret")
+        cases=[({"access_token":"token"},{"email":"test@example.com","email_verified":True,"sub":""}),({"access_token":"token"},{"email":"test@example.com","email_verified":"false","sub":"subject"}),({"access_token":""},None)]
+        for token,identity in cases:
+            with self.client.session_transaction() as session:session["oauth_state"]="expected"
+            with patch("ruang_pangkas.web._http_json",side_effect=[token,identity]):
+                response=self.client.get("/auth/google/callback?state=expected&code=test")
+            self.assertTrue(response.location.endswith("/masuk"))
+            with self.client.session_transaction() as session:self.assertNotIn("customer",session)
+        with self.client.session_transaction() as session:session["oauth_state"]="expected"
+        with patch("ruang_pangkas.web._http_json",side_effect=[{"access_token":"token"},{"email":"test@example.com","email_verified":True,"sub":"subject","name":"Test"}]):
+            response=self.client.get("/auth/google/callback?state=expected&code=test")
+        self.assertTrue(response.location.endswith("/dasbor"))
+
+    def test_vercel_manual_email_processing_is_bounded(self):
+        self.login()
+        with patch.dict("os.environ",{"VERCEL":"1"}), patch("ruang_pangkas.web.process_messages",return_value=0) as customer, patch("ruang_pangkas.web.process_admin_notifications",return_value=0) as admin:
+            self.post("/admin/messages",{})
+        customer.assert_called_once_with(self.app.config["DATABASE"],self.app.config,limit=1)
+        admin.assert_called_once_with(self.app.config["DATABASE"],self.app.config,limit=1)
 
 
 if __name__ == "__main__":

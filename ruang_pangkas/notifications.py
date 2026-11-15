@@ -3,7 +3,7 @@ import base64
 import hashlib
 import json
 from urllib.parse import urlsplit
-from database import connect, settings
+from .database import connect, settings
 
 TITLES = {"booking_dibuat": "Booking baru", "jadwal_diubah": "Jadwal booking diubah", "dibatalkan": "Booking dibatalkan"}
 
@@ -85,7 +85,7 @@ def _send_push(subscription, private_key, admin_email, title, notification_id):
 
 
 def process_admin_notifications(path, config, limit=1, notification_id=None):
-    from messaging import _send_smtp, _smtp_ready, smtp_error
+    from .messaging import _send_smtp, _smtp_ready, smtp_error
     with connect(path) as db:
         rows = db.execute("SELECT id FROM admin_notifications n WHERE (email_status='pending' OR EXISTS (SELECT 1 FROM push_deliveries p WHERE p.notification_id=n.id AND p.status='pending'))" + (" AND n.id=?" if notification_id is not None else "") + " ORDER BY id LIMIT ?", (int(notification_id),limit) if notification_id is not None else (limit,)).fetchall()
     count = 0

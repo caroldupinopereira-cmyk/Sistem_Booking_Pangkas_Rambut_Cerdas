@@ -1,6 +1,6 @@
 # Sistem Booking Pangkas Rambut Cerdas
 
-Aplikasi lokal Python + Flask + SQLite, mengikuti alur Pelanggan -> Sistem -> Admin/Kapster. Nama tampilan awal **Ruang Pangkas** dapat diubah admin. Database pelanggan kosong; yang diisi otomatis hanya contoh layanan, kapster, dan jam kerja.
+Aplikasi Python + Flask untuk booking pangkas rambut, dengan SQLite saat lokal atau Turso/libSQL saat online. Nama tampilan awal **Ruang Pangkas** dapat diubah admin. Database baru hanya diisi contoh layanan, kapster, dan jam kerja; tidak ada pelanggan sintetis yang ditambahkan.
 
 ## Menjalankan di Visual Studio Code
 
@@ -12,7 +12,7 @@ Aplikasi lokal Python + Flask + SQLite, mengikuti alur Pelanggan -> Sistem -> Ad
 6. Buka http://127.0.0.1:5000/setup untuk membuat akun admin pertama (email + password), kemudian atur nama usaha, harga, kapster, jam kerja, dan toleransi.
 7. Hentikan server dengan Ctrl+C. Database tetap tersimpan.
 
-Bisa juga klik dua kali **JALANKAN.bat**. Python 3.10+ diperlukan. Flask sudah tersedia pada laptop yang dipakai saat pembuatan. Pada laptop baru, gunakan lingkungan virtual:
+Bisa juga klik dua kali **JALANKAN.bat**. Gunakan Python 3.12 sesuai konfigurasi deployment. Flask sudah tersedia pada laptop yang dipakai saat pembuatan. Pada laptop baru, gunakan lingkungan virtual:
 
 ```powershell
 python -m venv .venv
@@ -94,15 +94,25 @@ Tidak ada penolakan atau pembatalan otomatis berdasarkan skor. Data sintetis tid
 
 ## Struktur file
 
-- `app.py`: halaman, formulir, login, CSRF, dan worker.
-- `booking.py`: aturan slot, transaksi booking, reschedule, batal, status.
-- `database.py`: skema SQLite dan konfigurasi awal.
-- `messaging.py`: outbox, simulasi, dan pengiriman email SMTP.
-- `analytics.py`: baseline analisis.
-- `templates/`: tampilan HTML.
-- `static/style.css`, `static/app.js`: desain responsif dan pemilihan slot.
-- `tests/test_app.py`: pengujian aturan bisnis dan akses halaman.
-- `instance/`: database dan secret lokal, tidak untuk diunggah publik.
+```text
+ruang_pangkas/       Kode utama: web, booking, database, email, notifikasi, analisis
+scripts/            Alat penggantian admin dan pembuatan konfigurasi privat
+static/             CSS, JavaScript, service worker, dan ikon sumber
+templates/          Tampilan HTML pelanggan dan admin
+tests/              Pengujian SQLite dan libSQL
+docs/              Panduan deployment dan hasil pemeriksaan proyek
+instance/           Database SQLite dan kunci lokal (privat, tidak masuk Git)
+work/               File konfigurasi privat dan hasil pengujian sementara
+public/static/      Salinan aset hasil build, jangan diedit langsung
+app.py              Entry point lokal: python app.py
+wsgi.py             Entry point Vercel
+```
+
+Perintah lama tetap berlaku: `python app.py`, `python admin_account.py`, dan
+`python prepare_vercel_env.py`. Implementasi dua alat terakhir berada di `scripts/`;
+file di root hanya meneruskan perintah. Alternatif: `python -m scripts.admin_account`.
+
+Lihat [hasil pemeriksaan proyek](docs/PROJECT_REVIEW.md) untuk temuan dan prioritas.
 
 ## Pengujian
 
@@ -118,7 +128,7 @@ Folder proyek berada dalam jalur OneDrive. Jalankan satu salinan database pada s
 
 ## Persiapan hosting
 
-Lihat [DEPLOYMENT.md](DEPLOYMENT.md). Konfigurasi Vercel, Turso, dan email transaksi tersedia. Pengingat terjadwal membutuhkan scheduler terpisah. Jalankan `python prepare_vercel_env.py` untuk menyiapkan file konfigurasi pribadi.
+Lihat [panduan deployment](docs/DEPLOYMENT.md). Konfigurasi Vercel, Turso, dan email transaksi tersedia. Pengingat terjadwal membutuhkan scheduler terpisah. Jalankan `python prepare_vercel_env.py` untuk menyiapkan file konfigurasi pribadi.
 
 ## Satu akun admin dan penggantian akun
 

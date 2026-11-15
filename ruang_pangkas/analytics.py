@@ -2,8 +2,8 @@
 
 from datetime import timedelta
 from collections import Counter
-from booking import now, parse, slots
-from database import settings
+from .booking import now, parse, slots
+from .database import settings
 
 
 def insights(db):

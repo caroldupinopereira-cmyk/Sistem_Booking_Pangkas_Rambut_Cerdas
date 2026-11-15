@@ -5,8 +5,8 @@ import smtplib
 import socket
 import ssl
 from email.message import EmailMessage
-from database import connect
-from booking import now, stamp, get_booking, parse
+from .database import connect
+from .booking import now, stamp, get_booking, parse
 
 
 def _build(b, kind, link):

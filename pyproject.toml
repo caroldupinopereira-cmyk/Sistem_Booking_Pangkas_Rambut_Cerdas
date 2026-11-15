@@ -9,3 +9,6 @@ entrypoint = "wsgi:app"
 
 [tool.vercel.scripts]
 build = "python build.py"
+
+[tool.setuptools.packages.find]
+include = ["ruang_pangkas*", "scripts*"]

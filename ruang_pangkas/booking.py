@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import re, secrets
-from database import connect, settings
-from notifications import record_event
+from .database import connect, settings
+from .notifications import record_event
 
 ACTIVE = ("scheduled", "arrived", "serving")
 RESERVED = ("scheduled", "arrived", "serving", "completed")

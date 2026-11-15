@@ -1,0 +1,10 @@
+{
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "work/tests": true,
+        "work/tmp*": true,
+        "work/deploy-deps": true,
+        "public/static": true
+    }
+}
