@@ -1761,3 +1761,13 @@ body{font-family:"Segoe UI",Arial,sans-serif;font-size:17px}h1,h2,h3,.brand{font
 @media(max-width:1000px){.brand-name{display:none}}
 @media(max-width:760px){.brand-logo{width:140px}.topbar .brand{min-width:0;flex-shrink:0}}
 @media(max-width:380px){.brand-logo{width:105px}.topbar{padding-left:12px;padding-right:12px;gap:8px}.topbar nav{min-width:0}.topbar .nav-pill{padding:10px}}
+
+/* Keep admin navigation available while the content scrolls. */
+@media(min-width:761px){
+    .admin-body .topbar{position:sticky;top:0;z-index:50}
+    .admin-body .sidebar{position:sticky;top:80px;align-self:start;height:calc(100vh - 80px);height:calc(100dvh - 80px);overflow-y:auto;overscroll-behavior-y:contain}
+    .admin-body .sidebar>a{flex-shrink:0}
+}
+@media(max-width:760px){
+    .admin-body .sidebar{position:sticky;top:0;z-index:40;align-self:start}
+}
