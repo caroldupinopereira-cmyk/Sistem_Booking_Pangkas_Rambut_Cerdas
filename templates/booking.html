@@ -16,7 +16,7 @@
     <div class="detail-grid">
         <section class="panel booking-ticket">
             <div class="ticket-head">
-                <span class="brand-mark" aria-hidden="true">{{ icon("scissors") }}</span>
+                <img class="ticket-logo" src="{{ url_for('static', filename='logo-barbershop.png') }}" alt="BarberShop" width="1178" height="422">
                 <span class="badge {{ b.status }}">{{ status_labels[b.status] }}</span>
             </div>
             <span class="eyebrow">{{ b.code }}</span>
@@ -89,7 +89,7 @@
                 </form>
             {% else %}
                 <div class="empty-state">
-                    <span>◷</span>
+                    <span>â—·</span>
                     <h3>{{ 'Batas perubahan mandiri sudah lewat' if b.status=='scheduled' else 'Booking sudah diproses' }}</h3>
                     <p>Ubah atau batal mandiri tersedia hanya untuk booking terjadwal, minimal 1 jam sebelum pelayanan.</p>
                 </div>
@@ -163,7 +163,7 @@
                 {% for h in history %}
                     <li>
                         <b>{{ h.action|replace('_', ' ') }}</b>
-                        <span>{{ h.created|when }} · {{ h.actor }}</span>
+                        <span>{{ h.created|when }} Â· {{ h.actor }}</span>
                         {% if h.new_start %}
                             <small>Jadwal: {{ h.new_start|when }}</small>
                         {% endif %}

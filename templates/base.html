@@ -5,7 +5,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
         {% if is_admin %}<link rel="manifest" href="{{ url_for('manifest') }}">{% endif %}
-        <title>{% block title %}{{ shop.shop_name }}{% endblock %} · Booking Pangkas</title>
+        <title>{% block title %}{{ shop.shop_name }}{% endblock %} Â· Booking Pangkas</title>
         <link rel="stylesheet" href="{{ url_for('static',filename='style.css',v=asset_version) }}">
         <script src="{{ url_for('static',filename='app.js',v=script_version) }}" defer></script>
     </head>
@@ -15,10 +15,9 @@
             <input type="hidden" name="csrf" value="{{ csrf() }}">
         {% endmacro %}
         <header class="topbar">
-            <a class="brand" href="{{ url_for('home') }}">
-                <span class="brand-mark" aria-hidden="true">{{ icon("scissors") }}</span>
-                <span>{{ shop.shop_name }}<small>BOOKING & GROOMING</small>
-                </span>
+            <a class="brand" href="{{ url_for('home') }}" aria-label="{{ shop.shop_name }} — Beranda">
+                <img class="brand-logo" src="{{ url_for('static', filename='logo-barbershop.png') }}" alt="BarberShop" width="1178" height="422">
+                <span class="brand-name">{{ shop.shop_name }}<small>BOOKING & GROOMING</small></span>
             </a>
             <nav>
                 {% if request.path.startswith('/admin') %}
@@ -53,7 +52,7 @@
                             <span>{{ icon(icon_name) }}</span>{{ label }}</a>
                     {% endfor %}
                     <div class="sidebar-note">
-                        <span class="status-dot"></span> {{ 'Online' if database_online else 'Lokal' }} · WIB
+                        <span class="status-dot"></span> {{ 'Online' if database_online else 'Lokal' }} Â· WIB
                         <p>{{ 'Data tersimpan di Turso.' if database_online else 'Data tersimpan di laptop ini.' }}</p>
                         <small>Email: {{ 'simulasi' if mail_mode=='demo' else 'SMTP' }}</small>
                     </div>
@@ -74,7 +73,7 @@
         <footer>
             <span>{{ shop.shop_name }} <span class="muted">/ Sistem Booking Pangkas Rambut Cerdas</span>
             </span>
-            <span>Proyek Sains Data Industri · Waktu Indonesia Barat</span>
+            <span>Proyek Sains Data Industri Â· Waktu Indonesia Barat</span>
         </footer>
     </body>
 </html>

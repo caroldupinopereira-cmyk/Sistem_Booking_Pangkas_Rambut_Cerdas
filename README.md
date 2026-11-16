@@ -1,12 +1,16 @@
 # Ruang Pangkas
 
+<p>
+<img src="static/logo-barbershop.png" width="280" alt="Logo BarberShop">
+</p>
+
 Sistem booking pangkas rambut berbasis **Python dan Flask**, dengan SQLite untuk penggunaan lokal dan **Turso/libSQL** untuk website di Vercel. Pelanggan dapat memilih layanan, kapster, dan jadwal; admin mengelola booking serta operasional melalui dasbor.
 
 **[Buka aplikasi](https://sistem-booking-pangkas-rambut-cerda.vercel.app/)** · [Panduan deployment](docs/DEPLOYMENT.md) · [Detail fitur dan operasional](docs/FEATURES.md)
 
 ## Tampilan halaman utama
 
-Klik gambar untuk membuka website.
+Pratinjau aplikasi dengan logo **BarberShop** yang baru. Klik gambar untuk membuka website online.
 
 [![Halaman utama Ruang Pangkas pada komputer](docs/images/homepage-desktop.png)](https://sistem-booking-pangkas-rambut-cerda.vercel.app/)
 
@@ -19,7 +23,7 @@ Klik gambar untuk membuka website.
 
 </details>
 
-*Screenshot halaman publik diambil pada 16 November 2026. Nama usaha, layanan, dan harga dapat diubah admin.*
+*Screenshot diambil dari versi lokal terbaru pada 16 November 2026 menggunakan data contoh, tanpa data pelanggan. Tampilan online mengikuti deployment terakhir. Nama usaha, layanan, dan harga dapat diubah admin.*
 
 ## Fitur utama
 
@@ -49,7 +53,7 @@ Pasang **Python 3.12**, buka folder proyek di VS Code, lalu jalankan di terminal
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-.venv\Scripts\python.exe app.py
+.venv\Scripts\python.exe -m ruang_pangkas
 ```
 
 Sesuaikan `.env` berdasarkan `.env.example`. Tanpa konfigurasi Turso, gunakan database SQLite lokal. Tidak perlu MySQL atau XAMPP.
@@ -85,18 +89,18 @@ Gunakan `.env.example` sebagai acuan lengkap. **Jangan unggah `.env`, token, san
 ```text
 ruang_pangkas/       Logika aplikasi, booking, database, email, dan analisis
 scripts/            Alat pengelolaan admin dan konfigurasi
-static/             CSS, JavaScript, service worker, dan ikon sumber
+static/             CSS, JavaScript, service worker, ikon, dan logo BarberShop
 templates/          Halaman HTML pelanggan dan admin
 tests/              Pengujian aplikasi dan database
 docs/               Panduan, hasil pemeriksaan, dan screenshot
 instance/           Database dan kunci lokal privat, tidak masuk Git
 work/               File privat dan hasil sementara, tidak masuk Git
 public/static/      Aset hasil build, jangan diedit langsung
-app.py              Menjalankan aplikasi lokal
-wsgi.py             Entry point Vercel
+ruang_pangkas/__main__.py  Peluncur aplikasi lokal
+ruang_pangkas/wsgi.py     Entry point Vercel
 ```
 
-Perintah penggantian admin: `python admin_account.py`. Alat ini memakai database yang dikonfigurasi; pastikan tujuan SQLite atau Turso sudah benar. Penjelasan lengkap tersedia di [panduan operasional](docs/FEATURES.md#satu-akun-admin-dan-penggantian-akun).
+Perintah penggantian admin: `python -m scripts.admin_account`. Alat ini memakai database yang dikonfigurasi; pastikan tujuan SQLite atau Turso sudah benar. Penjelasan lengkap tersedia di [panduan operasional](docs/FEATURES.md#satu-akun-admin-dan-penggantian-akun).
 
 ## Pengujian
 
@@ -111,7 +115,7 @@ Pengujian memakai database sementara dan tidak mengirim email sungguhan.
 - Zona waktu **WIB**, slot mulai setiap **15 menit**, dan pemesanan maksimal **60 hari**. Pelanggan dapat mengubah atau membatalkan minimal **60 menit** sebelum jadwal; admin dapat membantu setelah tenggat.
 - Email konfirmasi, perubahan jadwal, dan pembatalan booking online tetap dibuat meskipun pelanggan tidak memilih pengingat. Pengingat merupakan pilihan terpisah.
 - Status email diterima server SMTP belum menjamin masuk Inbox. Periksa **Admin > Pesan Email**, konfigurasi SMTP, dan folder Spam. Booking tetap tersimpan jika pengiriman email gagal.
-- Worker lokal berjalan saat `python app.py` aktif. Pengingat terjadwal di Vercel memerlukan scheduler eksternal yang mengakses `/api/cron/messages` dengan autentikasi `CRON_SECRET`; lihat panduan deployment.
+- Worker lokal berjalan saat `python -m ruang_pangkas` aktif. Pengingat terjadwal di Vercel memerlukan scheduler eksternal yang mengakses `/api/cron/messages` dengan autentikasi `CRON_SECRET`; lihat panduan deployment.
 - Pembayaran dicatat manual. Satu lokasi didukung. Jangan membuka satu file SQLite melalui sinkronisasi OneDrive dari beberapa komputer sekaligus.
 
 ## Dokumentasi

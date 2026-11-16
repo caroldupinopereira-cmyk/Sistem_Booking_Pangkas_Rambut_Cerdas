@@ -50,9 +50,9 @@ Jalankan dari root:
 
 ```powershell
 python -m unittest discover -s tests -v
-python app.py
-python admin_account.py --help
-python build.py
+python -m ruang_pangkas
+python -m scripts.admin_account --help
+python -m scripts.build
 ```
 
 ## Lokasi berkas
@@ -67,5 +67,5 @@ python build.py
 - [Analisis](../ruang_pangkas/analytics.py)
 
 .env, instance/, dan work/ tetap privat. public/static/ adalah hasil build; ubah aset
-sumber di static/, kemudian jalankan build.py. Entry point root yang tipis dipertahankan
-agar perintah lama tetap dapat digunakan.
+sumber di static/, kemudian jalankan python -m scripts.build. Semua file Python
+berada di ruang_pangkas/, scripts/, atau tests/.

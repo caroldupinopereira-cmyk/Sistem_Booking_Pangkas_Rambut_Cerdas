@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "wsgi.py": { "maxDuration": 60 }
+    "ruang_pangkas/wsgi.py": { "maxDuration": 60 }
   }
 }

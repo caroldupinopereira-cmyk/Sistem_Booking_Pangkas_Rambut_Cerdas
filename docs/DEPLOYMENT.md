@@ -7,16 +7,16 @@ Database lokal, .env, dan kredensial tidak dipindahkan otomatis.
 
 ## File hosting
 
-- `wsgi.py`: entry point Flask tanpa server lokal dan tanpa thread pengingat.
-- `pyproject.toml`: Python 3.12 dan entry point Vercel `wsgi:app`.
+- `ruang_pangkas/wsgi.py`: entry point Flask tanpa server lokal dan tanpa thread pengingat.
+- `pyproject.toml`: Python 3.12 dan entry point Vercel `ruang_pangkas.wsgi:app`.
 - `.vercelignore`: mengecualikan rahasia, database, backup, dan file lokal dari upload CLI.
 - `.gitignore`: mengecualikan rahasia dan cadangan dari commit berikutnya.
-- `build.py`: menyalin hanya CSS dan JavaScript ke public/static untuk CDN.
+- `scripts/build.py`: menyalin hanya CSS dan JavaScript ke public/static untuk CDN.
 - `vercel.json`: durasi fungsi maksimal 60 detik.
-- `prepare_vercel_env.py`: membuat work/vercel.env pribadi untuk import konfigurasi.
+- `scripts/prepare_vercel_env.py`: membuat work/vercel.env pribadi untuk import konfigurasi.
 
 Tidak perlu konfigurasi `builds` atau `rewrites` lama di vercel.json.
-Perilaku lokal tetap dijalankan lewat `python app.py`.
+Perilaku lokal tetap dijalankan lewat `python -m ruang_pangkas`.
 
 ## 1. Database permanen (langkah berikutnya)
 
@@ -66,7 +66,7 @@ Jangan mengganti SECRET_KEY setiap request atau setiap startup.
 Cookie sesi otomatis menggunakan Secure ketika PUBLIC_BASE_URL memakai HTTPS.
 Gunakan database dan rahasia terpisah untuk Preview dan Production.
 
-Jalankan `python prepare_vercel_env.py`. Pada pengaturan Environment Variables
+Jalankan `python -m scripts.prepare_vercel_env`. Pada pengaturan Environment Variables
 Vercel, import file `work/vercel.env` (atau salin isinya hanya ke formulir Vercel).
 File ini berisi rahasia asli: jangan kirim ke chat atau commit ke GitHub.
 PUBLIC_BASE_URL dan GOOGLE_REDIRECT_URI lokal sengaja tidak disertakan.
@@ -142,6 +142,6 @@ mock. Jangan mengklaim pengiriman OS sudah diuji hanya karena tes otomatis lulus
 ## Lokasi kode setelah perapian
 
 Kode aplikasi berada di ruang_pangkas/, HTML di templates/, dan aset di static/.
-Entry point Vercel tetap wsgi:app. build.py tetap berada di root sesuai pyproject.toml.
-Perintah lokal python app.py dan python admin_account.py tetap didukung melalui
-entry point tipis; alat administrasi sebenarnya berada di scripts/.
+Entry point Vercel adalah ruang_pangkas.wsgi:app. Build menggunakan
+python -m scripts.build. Jalankan lokal dengan python -m ruang_pangkas;
+alat administrasi menggunakan python -m scripts.admin_account.

@@ -6,7 +6,7 @@ Aplikasi Python + Flask untuk booking pangkas rambut, dengan SQLite saat lokal a
 
 1. Buka folder ini melalui **File > Open Folder**.
 2. Buka **Terminal > New Terminal**.
-3. Jalankan `python app.py`.
+3. Jalankan `python -m ruang_pangkas`.
 4. Buka http://127.0.0.1:5000 untuk pelanggan.
 5. Pelanggan masuk/daftar di `/masuk` (Google atau email+password) lalu booking melalui `/dasbor`.
 6. Buka http://127.0.0.1:5000/setup untuk membuat akun admin pertama (email + password), kemudian atur nama usaha, harga, kapster, jam kerja, dan toleransi.
@@ -17,7 +17,7 @@ Bisa juga klik dua kali **JALANKAN.bat**. Gunakan Python 3.12 sesuai konfigurasi
 ```powershell
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe app.py
+.venv\Scripts\python.exe -m ruang_pangkas
 ```
 
 Tidak perlu MySQL atau XAMPP. Untuk F5, gunakan ekstensi Python dan Python Debugger yang direkomendasikan VS Code.
@@ -54,7 +54,7 @@ Tidak perlu MySQL atau XAMPP. Untuk F5, gunakan ekstensi Python dan Python Debug
 - Harga dan durasi disalin ke booking saat dibuat agar transaksi lama tidak berubah ketika tarif diperbarui.
 - Perubahan jam kerja/penonaktifan kapster tidak mengubah booking lama otomatis. Admin perlu memeriksa booking terdampak. Blokir waktu yang menabrak booking aktif ditolak.
 - Pembayaran di tempat dicatat manual. Informasi promo tidak menghitung potongan harga otomatis.
-- Runtime pengingat berjalan di thread setiap 15 detik selama `python app.py` hidup. Menjalankan lewat server WSGI lain belum menyalakan worker; sediakan worker terpisah untuk deployment.
+- Runtime pengingat berjalan di thread setiap 15 detik selama `python -m ruang_pangkas` hidup. Menjalankan lewat server WSGI lain belum menyalakan worker; sediakan worker terpisah untuk deployment.
 - Aplikasi tersedia di Vercel dengan database Turso. Backup terjadwal dan operasi multi-lokasi masih perlu disiapkan.
 
 ## Email (SMTP)
@@ -104,13 +104,12 @@ docs/              Panduan deployment dan hasil pemeriksaan proyek
 instance/           Database SQLite dan kunci lokal (privat, tidak masuk Git)
 work/               File konfigurasi privat dan hasil pengujian sementara
 public/static/      Salinan aset hasil build, jangan diedit langsung
-app.py              Entry point lokal: python app.py
-wsgi.py             Entry point Vercel
+ruang_pangkas/__main__.py  Peluncur lokal: python -m ruang_pangkas
+ruang_pangkas/wsgi.py     Entry point Vercel
 ```
 
-Perintah lama tetap berlaku: `python app.py`, `python admin_account.py`, dan
-`python prepare_vercel_env.py`. Implementasi dua alat terakhir berada di `scripts/`;
-file di root hanya meneruskan perintah. Alternatif: `python -m scripts.admin_account`.
+Jalankan dari folder utama proyek: `python -m ruang_pangkas`, `python -m scripts.admin_account`, dan
+`python -m scripts.prepare_vercel_env`. Semua alat administrasi berada di `scripts/`.
 
 Lihat [hasil pemeriksaan proyek](PROJECT_REVIEW.md) untuk temuan dan prioritas.
 
@@ -128,7 +127,7 @@ Folder proyek berada dalam jalur OneDrive. Jalankan satu salinan database pada s
 
 ## Persiapan hosting
 
-Lihat [panduan deployment](DEPLOYMENT.md). Konfigurasi Vercel, Turso, dan email transaksi tersedia. Pengingat terjadwal membutuhkan scheduler terpisah. Jalankan `python prepare_vercel_env.py` untuk menyiapkan file konfigurasi pribadi.
+Lihat [panduan deployment](DEPLOYMENT.md). Konfigurasi Vercel, Turso, dan email transaksi tersedia. Pengingat terjadwal membutuhkan scheduler terpisah. Jalankan `python -m scripts.prepare_vercel_env` untuk menyiapkan file konfigurasi pribadi.
 
 ## Satu akun admin dan penggantian akun
 
@@ -139,7 +138,7 @@ Untuk mengganti akun, isi `ADMIN_CHANGE_CODE` dalam .env dengan kode acak minima
 `python -c "import secrets; print(secrets.token_hex(32))"`.
 Kode ini berbeda dari password admin, sandi Gmail, dan Client Secret Google.
 
-Jalankan `python admin_account.py` dari terminal server yang menyimpan database.
+Jalankan `python -m scripts.admin_account` dari terminal server yang menyimpan database.
 Masukkan kode khusus, email baru, dan password baru dua kali. Kode khusus terlihat agar mudah ditempel; jangan bagikan layar terminal. Password
 tetap disembunyikan saat diketik. Akun lama diperbarui, bukan menambah akun kedua.
 Sesi lama dibatalkan pada request berikutnya, termasuk jika email tidak berubah.
