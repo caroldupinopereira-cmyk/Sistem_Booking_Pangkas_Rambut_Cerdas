@@ -19,7 +19,6 @@ Pratinjau aplikasi dengan logo **BarberShop** yang baru. Klik gambar untuk membu
 
 </details>
 
-*Screenshot diambil dari versi lokal terbaru pada 16 November 2026 menggunakan data contoh, tanpa data pelanggan. Tampilan online mengikuti deployment terakhir. Nama usaha, layanan, dan harga dapat diubah admin.*
 
 ## Fitur utama
 
