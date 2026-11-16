@@ -1,9 +1,5 @@
 # Ruang Pangkas
 
-<p>
-<img src="static/logo-barbershop.png" width="280" alt="Logo BarberShop">
-</p>
-
 Sistem booking pangkas rambut berbasis **Python dan Flask**, dengan SQLite untuk penggunaan lokal dan **Turso/libSQL** untuk website di Vercel. Pelanggan dapat memilih layanan, kapster, dan jadwal; admin mengelola booking serta operasional melalui dasbor.
 
 **[Buka aplikasi](https://sistem-booking-pangkas-rambut-cerda.vercel.app/)** · [Panduan deployment](docs/DEPLOYMENT.md) · [Detail fitur dan operasional](docs/FEATURES.md)
