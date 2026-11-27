@@ -6,7 +6,7 @@ Aplikasi Python + Flask untuk booking pangkas rambut, dengan SQLite saat lokal a
 
 1. Buka folder ini melalui **File > Open Folder**.
 2. Buka **Terminal > New Terminal**.
-3. Jalankan `python -m ruang_pangkas`.
+3. Jalankan `python -m backend`.
 4. Buka http://127.0.0.1:5000 untuk pelanggan.
 5. Pelanggan masuk/daftar di `/masuk` (Google atau email+password) lalu booking melalui `/dasbor`.
 6. Buka http://127.0.0.1:5000/setup untuk membuat akun admin pertama (email + password), kemudian atur nama usaha, harga, kapster, jam kerja, dan toleransi.
@@ -17,7 +17,7 @@ Bisa juga klik dua kali **JALANKAN.bat**. Gunakan Python 3.12 sesuai konfigurasi
 ```powershell
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe -m ruang_pangkas
+.venv\Scripts\python.exe -m backend
 ```
 
 Tidak perlu MySQL atau XAMPP. Untuk F5, gunakan ekstensi Python dan Python Debugger yang direkomendasikan VS Code.
@@ -54,7 +54,7 @@ Tidak perlu MySQL atau XAMPP. Untuk F5, gunakan ekstensi Python dan Python Debug
 - Harga dan durasi disalin ke booking saat dibuat agar transaksi lama tidak berubah ketika tarif diperbarui.
 - Perubahan jam kerja/penonaktifan kapster tidak mengubah booking lama otomatis. Admin perlu memeriksa booking terdampak. Blokir waktu yang menabrak booking aktif ditolak.
 - Pembayaran di tempat dicatat manual. Informasi promo tidak menghitung potongan harga otomatis.
-- Runtime pengingat berjalan di thread setiap 15 detik selama `python -m ruang_pangkas` hidup. Menjalankan lewat server WSGI lain belum menyalakan worker; sediakan worker terpisah untuk deployment.
+- Runtime pengingat berjalan di thread setiap 15 detik selama `python -m backend` hidup. Menjalankan lewat server WSGI lain belum menyalakan worker; sediakan worker terpisah untuk deployment.
 - Aplikasi tersedia di Vercel dengan database Turso. Backup terjadwal dan operasi multi-lokasi masih perlu disiapkan.
 
 ## Email (SMTP)
@@ -95,20 +95,20 @@ Tidak ada penolakan atau pembatalan otomatis berdasarkan skor. Data sintetis tid
 ## Struktur file
 
 ```text
-ruang_pangkas/       Kode utama: web, booking, database, email, notifikasi, analisis
+backend/            Kode utama: web, booking, database, email, notifikasi, analisis
+frontend/           Tampilan HTML di templates/ dan aset di static/
 scripts/            Alat penggantian admin dan pembuatan konfigurasi privat
-static/             CSS, JavaScript, service worker, dan ikon sumber
-templates/          Tampilan HTML pelanggan dan admin
 tests/              Pengujian SQLite dan libSQL
 docs/              Panduan deployment dan hasil pemeriksaan proyek
 instance/           Database SQLite dan kunci lokal (privat, tidak masuk Git)
 work/               File konfigurasi privat dan hasil pengujian sementara
 public/static/      Salinan aset hasil build, jangan diedit langsung
-ruang_pangkas/__main__.py  Peluncur lokal: python -m ruang_pangkas
-ruang_pangkas/wsgi.py     Entry point Vercel
+backend/__main__.py  Peluncur lokal: python -m backend
+backend/wsgi.py     Entry point Vercel
+backend/paths.py    Sumber tunggal lokasi folder; ubah di sini jika folder dipindah
 ```
 
-Jalankan dari folder utama proyek: `python -m ruang_pangkas`, `python -m scripts.admin_account`, dan
+Jalankan dari folder utama proyek: `python -m backend`, `python -m scripts.admin_account`, dan
 `python -m scripts.prepare_vercel_env`. Semua alat administrasi berada di `scripts/`.
 
 Lihat [hasil pemeriksaan proyek](PROJECT_REVIEW.md) untuk temuan dan prioritas.

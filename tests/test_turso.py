@@ -10,7 +10,7 @@ try:
 except ImportError:
     libsql = None
 
-from ruang_pangkas.database import RemoteConnection, TursoDatabase
+from backend.database import RemoteConnection, TursoDatabase
 from test_app import BookingTests as BaseBookingTests
 
 
@@ -25,7 +25,7 @@ class TursoAdapterTests(BaseBookingTests):
             connection.execute("PRAGMA foreign_keys=ON")
             return connection
 
-        for module in ("ruang_pangkas.database", "ruang_pangkas.web", "ruang_pangkas.booking", "ruang_pangkas.messaging", "ruang_pangkas.notifications", "test_app"):
+        for module in ("backend.database", "backend.web", "backend.booking", "backend.messaging", "backend.notifications", "test_app"):
             self.driver_patches.enter_context(patch(module + ".connect", side_effect=driver_connect))
         super().setUp()
 

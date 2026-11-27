@@ -1,4 +1,3 @@
-from pathlib import Path
 from functools import wraps
 from datetime import timedelta
 import os, secrets, threading, time, logging, hmac, hashlib, json
@@ -17,6 +16,7 @@ from flask import (
     g,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
+from .paths import ROOT, FRONTEND, TEMPLATES, STATIC, INSTANCE, ENV_FILE
 from .database import connect, init_db, settings, TursoDatabase
 from .booking import (
     BookingError,
@@ -36,7 +36,6 @@ from .messaging import process_messages, send_verification_code, smtp_health
 from .analytics import insights
 from .notifications import inbox, mark_read, ensure_push_keys, save_subscription, process_admin_notifications, customer_inbox
 
-ROOT = Path(__file__).resolve().parent.parent
 STATUS = {
     "scheduled": "Terjadwal",
     "arrived": "Sudah datang",
@@ -59,10 +58,10 @@ def _http_json(url, method="GET", data=None, headers=None, timeout=10):
 
 
 def create_app(test_config=None):
-    app = Flask(__name__, template_folder=str(ROOT / "templates"), static_folder=str(ROOT / "static"), instance_path=str(ROOT / "instance"))
+    app = Flask(__name__, template_folder=str(ROOT / FRONTEND / TEMPLATES), static_folder=str(ROOT / FRONTEND / STATIC), instance_path=str(ROOT / INSTANCE))
     env = {}
-    if (ROOT / ".env").exists():
-        for line in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
+    if (ROOT / ENV_FILE).exists():
+        for line in (ROOT / ENV_FILE).read_text(encoding="utf-8").splitlines():
             if "=" in line and not line.lstrip().startswith("#"):
                 key, value = line.split("=", 1)
                 env[key.strip()] = value.strip().strip('"').strip("'")
@@ -70,7 +69,7 @@ def create_app(test_config=None):
     configured_secret = str(os.environ.get("SECRET_KEY") or env.get("SECRET_KEY") or "").strip()
     if test_config and test_config.get("SECRET_KEY"):
         configured_secret = test_config["SECRET_KEY"]
-    instance = ROOT / "instance"
+    instance = ROOT / INSTANCE
     if not configured_secret:
         if os.environ.get("VERCEL") == "1":
             raise RuntimeError("Isi SECRET_KEY di Environment Variables Vercel.")
@@ -298,8 +297,8 @@ def create_app(test_config=None):
             if cid:
                 cust = c.execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
         return dict(
-            asset_version=(ROOT / "static" / "style.css").stat().st_mtime_ns,
-            script_version=(ROOT / "static" / "app.js").stat().st_mtime_ns,
+            asset_version=(ROOT / FRONTEND / STATIC / "style.css").stat().st_mtime_ns,
+            script_version=(ROOT / FRONTEND / STATIC / "app.js").stat().st_mtime_ns,
             shop=cfg,
             status_labels=STATUS,
             days=DAYS,
@@ -775,7 +774,7 @@ def create_app(test_config=None):
 
     @app.route("/sw.js")
     def service_worker():
-        response = send_from_directory(ROOT / "static", "sw.js", mimetype="application/javascript")
+        response = send_from_directory(ROOT / FRONTEND / STATIC, "sw.js", mimetype="application/javascript")
         response.headers["Service-Worker-Allowed"] = "/"
         response.headers["Cache-Control"] = "no-cache"
         return response

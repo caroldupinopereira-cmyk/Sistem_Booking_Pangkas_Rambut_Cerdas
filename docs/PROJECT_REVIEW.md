@@ -9,12 +9,12 @@ Perubahan pada pemeriksaan ini masih lokal; belum dipush atau dideploy.
 
 | Temuan | Perbaikan |
 |---|---|
-| Kode inti dan alat administrasi bercampur di root | Kode dipindahkan ke ruang_pangkas/, alat bantu ke scripts/, panduan ke docs/. |
+| Kode inti dan alat administrasi bercampur di root | Kode dipindahkan ke backend/, alat bantu ke scripts/, panduan ke docs/. |
 | SECRET_KEY kosong dari .env menimpa kunci lokal yang valid | Factory mempertahankan kunci hasil resolusi konfigurasi; regresinya diuji. |
 | Respons Google tanpa token/sub atau email_verified bukan boolean true bisa lolos pemeriksaan awal | Validasi identitas diperketat sebelum akun dibuat atau sesi login diterbitkan. |
 | Tombol proses email manual mengambil banyak kiriman pada satu request Vercel | Pada Vercel dibatasi satu pesan pelanggan dan satu pemberitahuan admin per request. |
 | Pesan skema lama menyarankan menghapus database | Pesan diganti menjadi instruksi backup/migrasi. Tabel lama tidak dihapus diam-diam saat startup. |
-| Import modul berpotensi bertabrakan dengan nama paket eksternal | Modul internal memakai relative import di package ruang_pangkas. |
+| Import modul berpotensi bertabrakan dengan nama paket eksternal | Modul internal memakai relative import di package backend. |
 | File pengujian sementara bercampur dengan ekspor konfigurasi privat | Pengujian berikutnya menggunakan work/tests/. Berkas lama di work/ tidak dihapus. |
 
 ## Yang masih perlu diprioritaskan
@@ -50,7 +50,7 @@ Jalankan dari root:
 
 ```powershell
 python -m unittest discover -s tests -v
-python -m ruang_pangkas
+python -m backend
 python -m scripts.admin_account --help
 python -m scripts.build
 ```
@@ -59,13 +59,13 @@ python -m scripts.build
 
 - [README utama](../README.md)
 - [Panduan deployment](DEPLOYMENT.md)
-- [Factory dan route](../ruang_pangkas/web.py)
-- [Aturan booking](../ruang_pangkas/booking.py)
-- [Database](../ruang_pangkas/database.py)
-- [Email](../ruang_pangkas/messaging.py)
-- [Notifikasi](../ruang_pangkas/notifications.py)
-- [Analisis](../ruang_pangkas/analytics.py)
+- [Factory dan route](../backend/web.py)
+- [Aturan booking](../backend/booking.py)
+- [Database](../backend/database.py)
+- [Email](../backend/messaging.py)
+- [Notifikasi](../backend/notifications.py)
+- [Analisis](../backend/analytics.py)
 
 .env, instance/, dan work/ tetap privat. public/static/ adalah hasil build; ubah aset
-sumber di static/, kemudian jalankan python -m scripts.build. Semua file Python
-berada di ruang_pangkas/, scripts/, atau tests/.
+sumber di frontend/static/, kemudian jalankan python -m scripts.build. Semua file Python
+berada di backend/, scripts/, atau tests/.

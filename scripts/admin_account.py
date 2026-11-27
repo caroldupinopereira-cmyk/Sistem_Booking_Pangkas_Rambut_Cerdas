@@ -2,9 +2,9 @@
 import hmac
 import argparse
 from getpass import getpass
-from ruang_pangkas.web import create_app
-from ruang_pangkas.booking import normalize_email, BookingError
-from ruang_pangkas.database import connect
+from backend.web import create_app
+from backend.booking import normalize_email, BookingError
+from backend.database import connect
 from werkzeug.security import generate_password_hash
 
 

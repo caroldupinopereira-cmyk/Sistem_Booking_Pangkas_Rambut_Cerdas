@@ -5,7 +5,7 @@
             "name": "Jalankan Booking Pangkas",
             "type": "debugpy",
             "request": "launch",
-            "module": "ruang_pangkas",
+            "module": "backend",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "justMyCode": true

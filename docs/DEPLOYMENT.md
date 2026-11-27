@@ -7,8 +7,8 @@ Database lokal, .env, dan kredensial tidak dipindahkan otomatis.
 
 ## File hosting
 
-- `ruang_pangkas/wsgi.py`: entry point Flask tanpa server lokal dan tanpa thread pengingat.
-- `pyproject.toml`: Python 3.12 dan entry point Vercel `ruang_pangkas.wsgi:app`.
+- `backend/wsgi.py`: entry point Flask tanpa server lokal dan tanpa thread pengingat.
+- `pyproject.toml`: Python 3.12 dan entry point Vercel `backend.wsgi:app`.
 - `.vercelignore`: mengecualikan rahasia, database, backup, dan file lokal dari upload CLI.
 - `.gitignore`: mengecualikan rahasia dan cadangan dari commit berikutnya.
 - `scripts/build.py`: menyalin hanya CSS dan JavaScript ke public/static untuk CDN.
@@ -16,7 +16,7 @@ Database lokal, .env, dan kredensial tidak dipindahkan otomatis.
 - `scripts/prepare_vercel_env.py`: membuat work/vercel.env pribadi untuk import konfigurasi.
 
 Tidak perlu konfigurasi `builds` atau `rewrites` lama di vercel.json.
-Perilaku lokal tetap dijalankan lewat `python -m ruang_pangkas`.
+Perilaku lokal tetap dijalankan lewat `python -m backend`.
 
 ## 1. Database permanen (langkah berikutnya)
 
@@ -141,7 +141,7 @@ mock. Jangan mengklaim pengiriman OS sudah diuji hanya karena tes otomatis lulus
 
 ## Lokasi kode setelah perapian
 
-Kode aplikasi berada di ruang_pangkas/, HTML di templates/, dan aset di static/.
-Entry point Vercel adalah ruang_pangkas.wsgi:app. Build menggunakan
-python -m scripts.build. Jalankan lokal dengan python -m ruang_pangkas;
+Kode aplikasi berada di backend/, HTML di frontend/templates/, dan aset di frontend/static/.
+Entry point Vercel adalah backend.wsgi:app. Build menggunakan
+python -m scripts.build. Jalankan lokal dengan python -m backend;
 alat administrasi menggunakan python -m scripts.admin_account.

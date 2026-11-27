@@ -1,4 +1,4 @@
-"""Start the local application with python -m ruang_pangkas."""
+"""Start the local application with python -m backend."""
 from .web import run_local
 
 if __name__ == "__main__":

@@ -1,14 +1,12 @@
 """Publish only approved frontend assets to Vercel CDN."""
-from pathlib import Path
 from shutil import copyfile
-
-ROOT = Path(__file__).resolve().parent.parent
+from backend.paths import ROOT, PUBLIC, FRONTEND, STATIC
 
 def main():
-    target = ROOT / "public" / "static"
+    target = ROOT / PUBLIC / STATIC
     target.mkdir(parents=True, exist_ok=True)
     for name in ("style.css", "app.js", "admin-icon.svg", "logo-barbershop.png"):
-        copyfile(ROOT / "static" / name, target / name)
+        copyfile(ROOT / FRONTEND / STATIC / name, target / name)
     print("Prepared public frontend assets.")
 
 if __name__ == "__main__":
