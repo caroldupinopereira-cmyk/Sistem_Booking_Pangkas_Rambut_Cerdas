@@ -42,6 +42,9 @@
                 {% endif %}
                 <button class="btn primary wide">{{ 'Buat akun admin' if setup else 'Masuk dashboard' }} {{ icon("arrow-right") }}</button>
             </form>
+            {% if not setup %}
+                <p class="help">Pelanggan masuk dengan Google atau email di <a href="{{ url_for('masuk') }}">halaman pelanggan</a>.</p>
+            {% endif %}
             <a class="back-link" href="{{ url_for('home') }}">{{ icon("arrow-left") }} Kembali ke halaman pelanggan</a>
         </div>
     </section>

@@ -917,6 +917,19 @@ class BookingTests(unittest.TestCase):
         customer.assert_called_once_with(self.app.config["DATABASE"],self.app.config,limit=1)
         admin.assert_called_once_with(self.app.config["DATABASE"],self.app.config,limit=1)
 
+    def test_google_button_appears_on_customer_login_and_register(self):
+        self.app.config.update(GOOGLE_CLIENT_ID="test-client", GOOGLE_CLIENT_SECRET="test-secret")
+        for url in ("/masuk", "/daftar"):
+            with self.subTest(url=url):
+                self.assertIn("Masuk dengan Google", self.client.get(url).get_data(as_text=True))
+
+    def test_admin_login_points_to_customer_google_login(self):
+        self.post("/setup", dict(email="owner@example.com", password="contoh-password-ku"))
+        self.post("/logout", {})
+        page = self.client.get("/login").get_data(as_text=True)
+        self.assertIn("Pelanggan masuk dengan Google", page)
+        self.assertIn('href="/masuk"', page)
+
     def test_project_root_resolves_from_nested_package(self):
         from backend.paths import find_root
         base = Path(self.tmp.name) / "project" / "src"
