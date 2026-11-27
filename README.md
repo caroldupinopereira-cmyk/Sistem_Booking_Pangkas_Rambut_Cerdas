@@ -90,10 +90,14 @@ docs/               Panduan, hasil pemeriksaan, dan screenshot
 instance/           Database dan kunci lokal privat, tidak masuk Git
 work/               File privat dan hasil sementara, tidak masuk Git
 public/static/      Aset hasil build, jangan diedit langsung
-backend/__main__.py  Peluncur aplikasi lokal
+backend/__main__.py Peluncur aplikasi lokal
 backend/wsgi.py     Entry point Vercel
-backend/paths.py    Sumber tunggal lokasi folder; ubah di sini jika folder dipindah
+backend/paths.py    Sumber tunggal lokasi folder
 ```
+
+Lokasi folder dibaca dari `backend/paths.py`. Jika folder dipindah atau dinamai ulang, ubah konstanta di sana; jika paket `backend/` ikut berganti nama, sesuaikan juga entry point di `pyproject.toml`, `vercel.json`, `JALANKAN.bat`, dan `.vscode/launch.json`. Aplikasi tetap menemukan template, aset, `.env`, dan `instance/` meski dijalankan dari direktori lain.
+
+Ubah aset sumber di `frontend/static/`, lalu jalankan `.venv\Scripts\python.exe -m scripts.build` untuk memperbarui `public/static/`.
 
 Perintah penggantian admin: `python -m scripts.admin_account`. Alat ini memakai database yang dikonfigurasi; pastikan tujuan SQLite atau Turso sudah benar. Penjelasan lengkap tersedia di [panduan operasional](docs/FEATURES.md#satu-akun-admin-dan-penggantian-akun).
 
